@@ -91,6 +91,7 @@ main(int argc, char *argv[])
     /* Close socket. */
 
     close(data_socket);
+    fflush(stdout);
 
     exit(EXIT_SUCCESS);
 }
