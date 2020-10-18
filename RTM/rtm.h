@@ -22,7 +22,7 @@ typedef struct _route {
 
 typedef struct _sync_msg {
   OPCODE op_code;
-  route_t msg_body;
+  route_t route;
 } sync_msg_t;
 
 typedef struct _routinge_table {

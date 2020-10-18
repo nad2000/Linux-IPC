@@ -1,4 +1,5 @@
 #include "rtm.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -190,9 +191,40 @@ int main(int argc, char *argv[]) {
 
       add_to_monitored_fd_set(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
+
       memset(buffer, 0, BUFFER_SIZE);
       ret = read(0, buffer, BUFFER_SIZE);
       fprintf(stderr, "Input read from console : %s\n", buffer);
+      char *token = strtok(buffer, " ");
+      char op_code = toupper(token[0]);
+      if (op_code == 'L')
+        routing_table_print();
+      else if (op_code == 'Q')
+        exit(0);
+      else {
+        token = strtok(NULL, " ");
+        char destination[DESTINATION_SIZE];
+        char mask;
+        strncpy(destination, token, DESTINATION_SIZE);
+        token = strtok(NULL, " ");
+        mask = (char)atoi(token);
+        if (op_code == 'C' || op_code == 'U') {
+          char gateway[GATEWAY_SIZE];
+          char oif[OIF_SIZE];
+          token = strtok(NULL, " ");
+          strncpy(gateway, token, GATEWAY_SIZE);
+          token = strtok(NULL, " ");
+          strncpy(oif, token, OIF_SIZE);
+          if (op_code == 'C') {
+            routing_table_add_route(destination, mask, gateway, oif);
+          } else {
+            routing_table_update_route(destination, mask, gateway, oif);
+          }
+        } else if (op_code == 'D') {
+          routing_table_delete_route(destination, mask);
+        }
+      }
+
     } else /* Data srrives on some other client FD*/
     {
       /*Find the client which has send us the data request*/
