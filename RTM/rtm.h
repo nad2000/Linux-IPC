@@ -39,5 +39,6 @@ int routing_table_update_route(char destination[16], char mask,
                                char gateway[16], char oif[32]);
 int routing_table_delete_route(char destination[16], char mask);
 int routing_table_print();
+int dump_rounting_table(int fd);
 
 #endif /* !FILE_RTM_SEEN */

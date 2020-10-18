@@ -190,6 +190,7 @@ int main(int argc, char *argv[]) {
               data_socket);
 
       add_to_monitored_fd_set(data_socket);
+      dump_rounting_table(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
 
       memset(buffer, 0, BUFFER_SIZE);
