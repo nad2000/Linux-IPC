@@ -96,3 +96,70 @@ int dump_rounting_table(int fd) {
   }
   return routing_table.route_count;
 }
+
+int inline routing_table_routes_lookup(route_t *route) {
+  for (int i = 0; i < routing_table.route_count; i++)
+    if (strcmp(routing_table.route[i].destination, route->destination) == 0 &&
+        routing_table.route[i].mask == route->mask)
+      return i;
+  return -1;
+}
+
+int inline routing_table_routes_add(route_t *route) {
+  if (routing_table.route_count >= MAX_ROUTES) {
+    perror("the routing table is full");
+    return -1;
+  }
+  int position = routing_table_routes_lookup(route);
+  if (position != -1) {
+    perror("the routing table already has this route");
+    return -1;
+  }
+  position = routing_table.route_count;
+  strncpy(routing_table.route[position].destination, route->destination,
+          DESTINATION_SIZE - 1);
+  routing_table.route[position].mask = route->mask;
+  strncpy(routing_table.route[position].gateway, route->gateway,
+          GATEWAY_SIZE - 1);
+  strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
+  routing_table.route_count++;
+  fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
+          route->gateway, route->oif);
+
+  return position;
+}
+
+int inline routing_table_routes_update(route_t *route) {
+  int position = routing_table_routes_lookup(route);
+  if (position > -1) {
+    strncpy(routing_table.route[position].gateway, route->gateway,
+            GATEWAY_SIZE - 1);
+    strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
+    fprintf(stderr, "UPDATED: %s/%d %s %s to %s %s\n", route->destination,
+            route->mask, routing_table.route[position].gateway,
+            routing_table.route[position].oif, route->gateway, route->oif);
+    return position;
+  }
+  perror("the routing table does not have this route");
+  return -1;
+}
+
+int inline routing_table_routes_delete(route_t *route) {
+  int position = routing_table_routes_lookup(route);
+  if (position > -1) {
+    /* memmove(routing_table.route + position * sizeof(route_t),
+            routing_table.route + (position + 1) * sizeof(route_t),
+            (routing_table.route_count - position - 1) * sizeof(route_t)); */
+    fprintf(stderr, "DELETED: %s/%d %s %s\n",
+            routing_table.route[position].destination,
+            routing_table.route[position].mask,
+            routing_table.route[position].gateway,
+            routing_table.route[position].oif);
+    for (int i = position + 1; i < routing_table.route_count; i++)
+      routing_table.route[i - 1] = routing_table.route[i];
+    routing_table.route_count--;
+    return routing_table.route_count;
+  }
+  perror("the routing table does not have this route");
+  return -1;
+}

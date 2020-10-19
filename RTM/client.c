@@ -46,14 +46,25 @@ int main(int argc, char *argv[]) {
 
   // Read dumped routeing table
   sync_msg_t msg;
-  do {
+  for (;;) {
     memset(&msg, 0, sizeof(sync_msg_t));
     ret = read(data_socket, &msg, sizeof(sync_msg_t));
-    if (msg.op_code == 'C') {
-      routing_table_add_route(msg.route.destination, msg.route.mask,
-                              msg.route.gateway, msg.route.oif);
+    if (ret == -1) {
+      perror("read");
+      break;
     }
-  } while (msg.op_code == 'C');
+    switch (msg.op_code) {
+    case 'C':
+      routing_table_routes_add(&msg.route);
+      break;
+    case 'U':
+      routing_table_routes_update(&msg.route);
+      break;
+    case 'D':
+      routing_table_routes_delete(&msg.route);
+      break;
+    }
+  };
 
   /* Send arguments. */
   do {

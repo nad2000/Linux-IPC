@@ -40,5 +40,9 @@ int routing_table_update_route(char destination[16], char mask,
 int routing_table_delete_route(char destination[16], char mask);
 int routing_table_print();
 int dump_rounting_table(int fd);
+int routing_table_routes_lookup(route_t *route_t);
+int routing_table_routes_add(route_t *route);
+int routing_table_routes_update(route_t *route);
+int routing_table_routes_delete(route_t *route);
 
 #endif /* !FILE_RTM_SEEN */
