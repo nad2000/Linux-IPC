@@ -195,6 +195,8 @@ int main(int argc, char *argv[]) {
 
       memset(buffer, 0, BUFFER_SIZE);
       ret = read(0, buffer, BUFFER_SIZE);
+      if (ret == 1)
+        continue;
       fprintf(stderr, "Input read from console : %s\n", buffer);
       char *token = strtok(buffer, " ");
       char op_code = toupper(token[0]);
@@ -202,27 +204,44 @@ int main(int argc, char *argv[]) {
         routing_table_print();
       else if (op_code == 'Q')
         exit(0);
-      else {
+      else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
+        route_t route;
+        sync_msg_t msg;
+
         token = strtok(NULL, " ");
-        char destination[DESTINATION_SIZE];
-        char mask;
-        strncpy(destination, token, DESTINATION_SIZE);
+        strncpy(route.destination, token, DESTINATION_SIZE);
         token = strtok(NULL, " ");
-        mask = (char)atoi(token);
+        route.mask = (char)atoi(token);
         if (op_code == 'C' || op_code == 'U') {
-          char gateway[GATEWAY_SIZE];
-          char oif[OIF_SIZE];
           token = strtok(NULL, " ");
-          strncpy(gateway, token, GATEWAY_SIZE);
+          strncpy(route.gateway, token, GATEWAY_SIZE);
           token = strtok(NULL, " ");
-          strncpy(oif, token, OIF_SIZE);
+          strncpy(route.oif, token, OIF_SIZE);
           if (op_code == 'C') {
-            routing_table_add_route(destination, mask, gateway, oif);
+            routing_table_routes_add(&route);
           } else {
-            routing_table_update_route(destination, mask, gateway, oif);
+            routing_table_routes_update(&route);
           }
         } else if (op_code == 'D') {
-          routing_table_delete_route(destination, mask);
+          routing_table_routes_delete(&route);
+        }
+        // sync the entry with all teh clients:
+        msg.op_code = op_code;
+        msg.route = route;
+
+        for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
+
+          if (monitored_fd_set[i] == -1)
+            break;
+          int ret = write(monitored_fd_set[i], &msg, sizeof(sync_msg_t));
+          if (ret == -1) {
+            perror("failed to sync a route");
+            exit(EXIT_FAILURE);
+          } else {
+            fprintf(stderr, "Synced route %s/%d %s %s to %d\n",
+                    route.destination, route.mask, route.gateway, route.oif,
+                    monitored_fd_set[i]);
+          }
         }
       }
 
