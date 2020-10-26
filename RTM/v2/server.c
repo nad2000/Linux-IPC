@@ -1,5 +1,6 @@
 #include "rtm.h"
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -91,6 +92,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   int ret;
+  char op_code;
   int connection_socket;
   int data_socket;
   // int result;
@@ -100,6 +102,8 @@ int main(int argc, char *argv[]) {
   int comm_socket_fd, i;
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);
+
+  routing_table_load();
 
   /*In case the program exited inadvertently on the last run,
    *remove the socket.
@@ -127,11 +131,11 @@ int main(int argc, char *argv[]) {
   strncpy(name.sun_path, SOCKET_NAME, sizeof(name.sun_path) - 1);
 
   /* Bind socket to socket name.*/
-  /* Purpose of bind() system call is that application() dictate the underlying
-   * operating system the criteria of recieving the data. Here, bind() system
-   * call is telling the OS that if sender process sends the data destined to
-   * socket "/tmp/DemoSocket", then such data needs to be delivered to this
-   * server process (the server process)*/
+  /* Purpose of bind() system call is that application() dictate the
+   * underlying operating system the criteria of recieving the data. Here,
+   * bind() system call is telling the OS that if sender process sends the
+   * data destined to socket "/tmp/DemoSocket", then such data needs to be
+   * delivered to this server process (the server process)*/
   ret = bind(connection_socket, (const struct sockaddr *)&name,
              sizeof(struct sockaddr_un));
 
@@ -158,8 +162,8 @@ int main(int argc, char *argv[]) {
 
   /* This is the main loop for handling connections. */
   /*All Server process usually runs 24 x 7. Good Servers should always up
-   * and running and shold never go down. Have you ever seen Facebook Or Google
-   * page failed to load ??*/
+   * and running and shold never go down. Have you ever seen Facebook Or
+   * Google page failed to load ??*/
   for (;;) {
     char mac[18];
     refresh_fd_set(&readfds); /*Copy the entire monitored FDs to readfds*/
@@ -192,43 +196,28 @@ int main(int argc, char *argv[]) {
       add_to_monitored_fd_set(data_socket);
       dump_rounting_table(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
+      route_t route;
 
-      memset(buffer, 0, BUFFER_SIZE);
-      ret = read(0, buffer, BUFFER_SIZE);
-      if (ret == 1)
+      op_code = read_route(0, &route, mac);
+      if (!op_code)
         continue;
-      fprintf(stderr, "Input read from console : %s\n", buffer);
-      char *token = strtok(buffer, " ");
-      char op_code = toupper(token[0]);
+
       if (op_code == 'L')
         routing_table_print();
       else if (op_code == 'A')
         arp_table_print();
-      else if (op_code == 'Q')
+      else if (op_code == 'Q') {
+        routing_table_store();
         exit(0);
-      else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
-        route_t route;
+      } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
         sync_msg_t msg;
 
-        token = strtok(NULL, " ");
-        strncpy(route.destination, token, DESTINATION_SIZE);
-        token = strtok(NULL, " ");
-        route.mask = (char)atoi(token);
-
-        if (op_code == 'C' || op_code == 'U') {
-          token = strtok(NULL, " ");
-          strncpy(route.gateway, token, GATEWAY_SIZE);
-          token = strtok(NULL, " ");
-          strncpy(mac, token, 17);
-          token = strtok(NULL, " ");
-          strncpy(route.oif, token, OIF_SIZE);
-          if (op_code == 'C') {
-            routing_table_routes_add(&route, mac);
-          } else {
-            routing_table_routes_update(&route, mac);
-          }
+        if (op_code == 'C') {
+          routing_table_routes_add(&route, mac);
+        } else if (op_code == 'U') {
+          routing_table_routes_update(&route, mac);
         } else if (op_code == 'D') {
-          routing_table_routes_delete(&route, mac);
+          routing_table_routes_delete(&route);
         }
         // sync the entry with all teh clients:
         msg.op_code = op_code;
@@ -243,9 +232,9 @@ int main(int argc, char *argv[]) {
             perror("failed to sync a route");
             exit(EXIT_FAILURE);
           } else {
-            fprintf(stderr, "Synced route %s/%d %s %s to %d\n",
-                    route.destination, route.mask, route.gateway, route.oif,
-                    monitored_fd_set[i]);
+            fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
+                    route.destination, route.mask, route.gateway, mac,
+                    route.oif, monitored_fd_set[i]);
           }
         }
       }

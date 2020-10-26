@@ -1,4 +1,5 @@
 #include "rtm.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,16 +39,8 @@ int create_arp_table() {
       0); // offset from the base address of the physical/shared memory to be
           // mapped
 
-  /* shm_reg is the address in process's Virtual address space, just like any
-   * other address. The Linux paging mechanism maps this address to starting
-   * address of the shared memory region in kernel space. Any operation
-   * performed by process on shm_reg address is actually the operation
-   * performed in shared memory which resides in kernel*/
   memset(shm_reg, 0, sizeof(arp_table));
   munmap(shm_reg, sizeof(arp_table));
-  /*Reader process will not be able to read shm if writer unlink
-   * the name below*/
-  // shm_unlink(mmap_key);
   close(shm_fd);
   return sizeof(arp_table);
 }
@@ -150,8 +143,8 @@ int inline routing_table_routes_add(route_t *route, char mac[18]) {
   strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
   add_mac(mac);
   routing_table.route_count++;
-  fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
-          route->gateway, route->oif);
+  fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination, route->mask,
+          route->gateway, mac, route->oif);
 
   return position;
 }
@@ -177,14 +170,15 @@ int inline routing_table_routes_delete(route_t *route) {
     /* memmove(routing_table.route + position * sizeof(route_t),
             routing_table.route + (position + 1) * sizeof(route_t),
             (routing_table.route_count - position - 1) * sizeof(route_t)); */
-    fprintf(stderr, "DELETED: %s/%d %s %s\n",
+    fprintf(stderr, "DELETED: %s/%d %s %s %s\n",
             routing_table.route[position].destination,
             routing_table.route[position].mask,
-            routing_table.route[position].gateway,
+            routing_table.route[position].gateway, arp_table.mac[position],
             routing_table.route[position].oif);
     for (int i = position + 1; i < routing_table.route_count; i++)
       routing_table.route[i - 1] = routing_table.route[i];
     routing_table.route_count--;
+    delete_mac(position);
     return routing_table.route_count;
   }
   perror("the routing table does not have this route");
@@ -197,9 +191,6 @@ int add_mac(char *mac) {
 
   int shm_fd;
 
-  /*Create a shared memory object in kernel space. If shared memory already
-   * exists it will truncate it to zero bytes again*/
-  // shm_fd = shm_open(ARP_TABLE_KEY, O_CREAT | O_RDWR | O_TRUNC, 0660);
   shm_fd = shm_open(ARP_TABLE_KEY, O_CREAT | O_RDWR, 0660);
 
   if (shm_fd < 0) {
@@ -207,14 +198,6 @@ int add_mac(char *mac) {
     return -1;
   }
 
-  /* if (ftruncate(shm_fd, arp_table_size) == -1) { */
-  /*   printf("Error on ftruncate to allocate size of shared memory region\n");
-   */
-  /*   return -1; */
-  /* } */
-
-  /*Now map the shared memory in kernel space into process's Virtual address
-   * space*/
   void *shm_reg = mmap(
       NULL, // let the kernel chose to return the base address of shm memory
       arp_table_size, // sizeof the shared memory to map to virtual address
@@ -225,23 +208,53 @@ int add_mac(char *mac) {
       0); // offset from the base address of the physical/shared memory to be
           // mapped
 
-  /* shm_reg is the address in process's Virtual address space, just like any
-   * other address. The Linux paging mechanism maps this address to starting
-   * address of the shared memory region in kernel space. Any operation
-   * performed by process on shm_reg address is actually the operation
-   * performed in shared memory which resides in kernel*/
-  // memset(shm_reg, 0, arp_table_size);
-  // memcpy(&arp_table.mac_count, shm_reg, sizeof(int));
-  // memcpy(arp_table.mac, shm_reg, sizeof(char[18]) * arp_table.mac_count);
+  memcpy(shm_reg, &arp_table,
+         sizeof(char[18]) * arp_table.mac_count + sizeof(int));
+  munmap(shm_reg, arp_table_size);
+  shm_unlink(ARP_TABLE_KEY);
+  close(shm_fd);
+  return arp_table.mac_count;
+}
+
+int delete_mac(int entry_idx) {
+
+  if (entry_idx < arp_table.mac_count - 1) {
+    printf("there is no ARP table entry with index: %d", entry_idx);
+    return -1;
+  }
+
+  arp_table.mac_count--;
+  if (entry_idx < arp_table.mac_count - 1)
+    memcpy(arp_table.mac + entry_idx * (sizeof(char[18])),
+           arp_table.mac + (entry_idx + 1) * (sizeof(char[18])),
+           sizeof(char[18]) * (arp_table.mac_count + entry_idx));
+  memset(&arp_table.mac[arp_table.mac_count], 0, sizeof(char[18]));
+
+  int shm_fd;
+
+  shm_fd = shm_open(ARP_TABLE_KEY, O_CREAT | O_RDWR, 0660);
+  if (shm_fd < 0) {
+    printf("failure on shm_open on shm_fd, errcode = %d\n", errno);
+    return -1;
+  }
+
+  void *shm_reg = mmap(
+      NULL, // let the kernel chose to return the base address of shm memory
+      arp_table_size, // sizeof the shared memory to map to virtual address
+                      // space of the process
+      PROT_READ | PROT_WRITE, // shared memory is Read and Writable
+      MAP_SHARED, // shared memory is accessible by different processes
+      shm_fd,     // file descriptor of the shared memory
+      0); // offset from the base address of the physical/shared memory to be
+          // mapped
 
   memcpy(shm_reg, &arp_table,
          sizeof(char[18]) * arp_table.mac_count + sizeof(int));
   munmap(shm_reg, arp_table_size);
-  /*Reader process will not be able to read shm if writer unlink
-   * the name below*/
-  // shm_unlink(mmap_key);
+  shm_unlink(ARP_TABLE_KEY);
+
   close(shm_fd);
-  return arp_table_size;
+  return arp_table.mac_count;
 }
 
 int arp_table_print() {
@@ -252,4 +265,65 @@ int arp_table_print() {
     printf("%d: %s\n", i, arp_table.mac[i]);
   }
   return 0;
+}
+
+char read_route(int fd, route_t *route, char mac[18]) {
+  char buffer[BUFFER_SIZE];
+  int ret;
+
+  memset(buffer, 0, BUFFER_SIZE);
+  ret = read(fd, buffer, BUFFER_SIZE);
+  if (ret == 1)
+    return (char)0;
+  if (fd == 0)
+    fprintf(stderr, "Input read from console : %s\n", buffer);
+  else
+    fprintf(stderr, "Input read from %d : %s\n", fd, buffer);
+  char *token = strtok(buffer, " ");
+  char op_code = toupper(token[0]);
+  if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
+    route_t route;
+
+    token = strtok(NULL, " ");
+    strncpy(route.destination, token, DESTINATION_SIZE);
+    token = strtok(NULL, "/");
+    route.mask = (char)atoi(token);
+
+    if (op_code == 'C' || op_code == 'U') {
+      token = strtok(NULL, " ");
+      strncpy(route.gateway, token, GATEWAY_SIZE);
+      token = strtok(NULL, " ");
+      strncpy(mac, token, 17);
+      token = strtok(NULL, " ");
+      strncpy(route.oif, token, OIF_SIZE);
+    }
+  }
+  return op_code;
+}
+
+int routing_table_load() {
+  if (access(ROUTING_TABLE_FILENAME, R_OK) != -1) {
+
+    route_t route;
+    char op_code;
+    char mac[18];
+
+    int fd = open(ROUTING_TABLE_FILENAME, O_RDONLY);
+    do {
+      op_code = read_route(fd, &route, mac);
+    } while (op_code == 'C');
+    return close(fd);
+  }
+  return -1;
+}
+
+int routing_table_store() {
+
+  FILE *fd = fopen(ROUTING_TABLE_FILENAME, "w");
+  for (int i = 0; i < routing_table.route_count; i++) {
+    fprintf(fd, "C %s/%d %s %s %s", routing_table.route[i].destination,
+            routing_table.route[i].mask, routing_table.route[i].gateway,
+            arp_table.mac[i], routing_table.route[i].oif);
+  }
+  return fclose(fd);
 }
