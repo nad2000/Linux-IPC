@@ -54,6 +54,8 @@ dkms.conf
 .session.vim
 .ycm_extra_conf.py
 tags
+!signals/*.c
+!signals/*.md
 
 AF_UNIX/client
 AF_UNIX/multiplexing_server
@@ -67,3 +69,5 @@ RTM/v2/server
 RTM/v2/test
 SHM/demo/reader
 SHM/demo/writer
+signarls/a.out
+signarls/sig_trapping
