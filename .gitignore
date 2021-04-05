@@ -55,3 +55,15 @@ dkms.conf
 .ycm_extra_conf.py
 tags
 
+AF_UNIX/client
+AF_UNIX/multiplexing_server
+AF_UNIX/server
+msgQ/recvr
+msgQ/sender
+RTM/client
+RTM/server
+RTM/test
+RTM/v2/server
+RTM/v2/test
+SHM/demo/reader
+SHM/demo/writer
