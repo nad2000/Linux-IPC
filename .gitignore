@@ -71,3 +71,10 @@ SHM/demo/reader
 SHM/demo/writer
 signarls/a.out
 signarls/sig_trapping
+RTM/v3/client
+RTM/v3/server
+RTM/v3/test
+signarls/kill_recv
+signarls/kill_sender
+signarls/sig_trapping_abort
+signarls/sig_trapping_raise
