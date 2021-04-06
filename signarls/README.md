@@ -24,10 +24,11 @@ Three ways of generating Signals:
 ---
 
  1. Raising a signal form OS to a process (e.g. hitting ^C);
- 2. Sending a signal from a process to itself using *raise()*;
- 3. Sending a signal from one process to another using *kill()* within a userspace;
+ 2. Sending a signal from a process to itself using *raise(int signo)*;
+ 3. Sending a signal from one process to another using *kill(int PID, int signo)* within a userspace;
 
 Signal handling:
 ---
 
- 1. 
+ 1. create a handler with the signature `` static void signal_handler(int SIGNO);```
+ 2. register handler: ```signal(SIGNO, signal_handler);```
