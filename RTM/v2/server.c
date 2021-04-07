@@ -260,11 +260,11 @@ int main(int argc, char *argv[]) {
       dump_rounting_table(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
 
+      rl_callback_read_char();
       if (quit) {
         routing_table_store();
         exit(0);
       }
-      rl_callback_read_char();
 
     } else /* Data srrives on some other client FD*/
     {
