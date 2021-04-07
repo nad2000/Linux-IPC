@@ -144,12 +144,12 @@ int inline routing_table_routes_add(route_t *route, char mac[18]) {
   strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
 
   if (mac != NULL && strlen(mac) > 0) {
-	  add_mac(mac);
-	  fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination, route->mask,
-		  route->gateway, mac, route->oif);
+    add_mac(mac);
+    fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination,
+            route->mask, route->gateway, mac, route->oif);
   } else {
-	  fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
-		  route->gateway, route->oif);
+    fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
+            route->gateway, route->oif);
   }
   routing_table.route_count++;
 
@@ -274,6 +274,31 @@ int arp_table_print() {
   return 0;
 }
 
+char parse_route(char *buffer, route_t *route, char mac[18]) {
+  char *token = strtok(buffer, " ");
+  if (!token)
+    return (char)0;
+  char op_code = toupper(token[0]);
+
+  if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
+    // route_t route;
+    token = strtok(NULL, " ");
+    strncpy(route->destination, token, DESTINATION_SIZE);
+    token = strtok(NULL, "/");
+    route->mask = (char)atoi(token);
+
+    if (op_code == 'C' || op_code == 'U') {
+      token = strtok(NULL, " ");
+      strncpy(route->gateway, token, GATEWAY_SIZE);
+      token = strtok(NULL, " ");
+      strncpy(mac, token, 17);
+      token = strtok(NULL, " ");
+      strncpy(route->oif, token, OIF_SIZE);
+    }
+  }
+  return op_code;
+}
+
 char read_route(int fd, route_t *route, char mac[18]) {
   char buffer[BUFFER_SIZE];
   int ret;
@@ -286,26 +311,7 @@ char read_route(int fd, route_t *route, char mac[18]) {
     fprintf(stderr, "Input read from console : %s\n", buffer);
   else
     fprintf(stderr, "Input read from %d : %s\n", fd, buffer);
-  char *token = strtok(buffer, " ");
-  char op_code = toupper(token[0]);
-  if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
-    route_t route;
-
-    token = strtok(NULL, " ");
-    strncpy(route.destination, token, DESTINATION_SIZE);
-    token = strtok(NULL, "/");
-    route.mask = (char)atoi(token);
-
-    if (op_code == 'C' || op_code == 'U') {
-      token = strtok(NULL, " ");
-      strncpy(route.gateway, token, GATEWAY_SIZE);
-      token = strtok(NULL, " ");
-      strncpy(mac, token, 17);
-      token = strtok(NULL, " ");
-      strncpy(route.oif, token, OIF_SIZE);
-    }
-  }
-  return op_code;
+  return parse_route(buffer, route, mac);
 }
 
 int routing_table_load() {

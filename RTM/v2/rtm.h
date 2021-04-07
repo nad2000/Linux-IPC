@@ -56,6 +56,7 @@ void routing_table_init();
 /* int routing_table_update_route(char destination[16], char mask, */
 /*                                char gateway[16], char oif[32]); */
 /* int routing_table_delete_route(char destination[16], char mask); */
+char parse_route(char *buffer, route_t *route, char mac[18]);
 char read_route(int fd, route_t *route, char mac[18]);
 int routing_table_print();
 int routing_table_store();

@@ -1,6 +1,10 @@
 #include "rtm.h"
+
 #include <ctype.h>
 #include <fcntl.h>
+#include <readline/history.h>
+#include <readline/readline.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,6 +84,66 @@ static int get_max_fd() {
   return max;
 }
 
+int quit = false;
+void rl_cb(char *line) {
+  route_t route;
+  char op_code;
+  char mac[18];
+
+  if (NULL == line) {
+    quit = true;
+    return;
+  }
+
+  op_code = parse_route(line, &route, mac);
+
+  if (op_code == 'L')
+    routing_table_print();
+  else if (op_code == 'A')
+    arp_table_print();
+  else if (op_code == 'Q') {
+    quit = true;
+    return;
+  } else if (op_code == 'H') {
+    printf("H - help\nC - create an entry, \n"
+           "U - update an entry\nD - delete an entry\nL - list all entries\n");
+  } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
+    sync_msg_t msg;
+
+    if (op_code == 'C') {
+      routing_table_routes_add(&route, mac);
+    } else if (op_code == 'U') {
+      routing_table_routes_update(&route, mac);
+    } else if (op_code == 'D') {
+      routing_table_routes_delete(&route);
+    }
+    // sync the entry with all the clients:
+    msg.op_code = op_code;
+    msg.route = route;
+
+    for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
+
+      if (monitored_fd_set[i] == -1)
+        break;
+      int ret = write(monitored_fd_set[i], &msg, sizeof(sync_msg_t));
+      if (ret == -1) {
+        perror("failed to sync a route");
+        exit(EXIT_FAILURE);
+      } else {
+        fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
+                route.destination, route.mask, route.gateway, mac, route.oif,
+                monitored_fd_set[i]);
+      }
+    }
+  }
+
+  if (strlen(line) > 0)
+    add_history(line);
+
+  // printf("You typed:\n%s\n", line);
+  free(line);
+}
+
 int main(int argc, char *argv[]) {
 
   struct sockaddr_un name;
@@ -92,7 +156,6 @@ int main(int argc, char *argv[]) {
 #endif
 
   int ret;
-  char op_code;
   int connection_socket;
   int data_socket;
   // int result;
@@ -100,10 +163,11 @@ int main(int argc, char *argv[]) {
   char buffer[BUFFER_SIZE];
   fd_set readfds;
   int comm_socket_fd, i;
+
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);
-
   routing_table_load();
+  rl_callback_handler_install("# ", (rl_vcpfunc_t *)&rl_cb);
 
   /*In case the program exited inadvertently on the last run,
    *remove the socket.
@@ -165,7 +229,6 @@ int main(int argc, char *argv[]) {
    * and running and shold never go down. Have you ever seen Facebook Or
    * Google page failed to load ??*/
   for (;;) {
-    char mac[18];
     refresh_fd_set(&readfds); /*Copy the entire monitored FDs to readfds*/
     /* Wait for incoming connection. */
     fprintf(stderr, "Waiting on select() sys call\n");
@@ -196,52 +259,12 @@ int main(int argc, char *argv[]) {
       add_to_monitored_fd_set(data_socket);
       dump_rounting_table(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
-      route_t route;
 
-      op_code = read_route(0, &route, mac);
-      if (!op_code)
-        continue;
-
-      if (op_code == 'L')
-        routing_table_print();
-      else if (op_code == 'A')
-        arp_table_print();
-      else if (op_code == 'Q') {
+      if (quit) {
         routing_table_store();
         exit(0);
       }
-      else if (op_code == 'H' ) {
-	printf("H - help\nC - create an entry, \n"
-	       "U - update an entry\nD - delete an entry\nL - list all entries\n");
-      } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
-        sync_msg_t msg;
-
-        if (op_code == 'C') {
-          routing_table_routes_add(&route, mac);
-        } else if (op_code == 'U') {
-          routing_table_routes_update(&route, mac);
-        } else if (op_code == 'D') {
-          routing_table_routes_delete(&route);
-        }
-        // sync the entry with all the clients:
-        msg.op_code = op_code;
-        msg.route = route;
-
-        for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
-
-          if (monitored_fd_set[i] == -1)
-            break;
-          int ret = write(monitored_fd_set[i], &msg, sizeof(sync_msg_t));
-          if (ret == -1) {
-            perror("failed to sync a route");
-            exit(EXIT_FAILURE);
-          } else {
-            fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
-                    route.destination, route.mask, route.gateway, mac,
-                    route.oif, monitored_fd_set[i]);
-          }
-        }
-      }
+      rl_callback_read_char();
 
     } else /* Data srrives on some other client FD*/
     {
