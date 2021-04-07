@@ -16,7 +16,7 @@ int monitored_fd_set[MAX_CLIENT_SUPPORTED];
  * maintained in this client array.*/
 int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
-/*Remove all the FDs, if any, from the the array*/
+/*Remove all the FDs, if any, from the array*/
 static void intitiaze_monitor_fd_set() {
 
   int i = 0;
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
 
   /* This is the main loop for handling connections. */
   /*All Server process usually runs 24 x 7. Good Servers should always up
-   * and running and shold never go down. Have you ever seen Facebook Or Google
+   * and running and should never go down. Have you ever seen Facebook Or Google
    * page failed to load ??*/
   for (;;) {
 
@@ -167,8 +167,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Waiting on select() sys call\n");
 
     /* Call the select system call, server process blocks here.
-     * Linux OS keeps this process blocked untill the connection initiation
-     * request Or data requests arrives on any of the file Drscriptors in the
+     * Linux OS keeps this process blocked until the connection initiation
+     * request Or data requests arrives on any of the file Descriptors in the
      * 'readfds' set*/
 
     select(get_max_fd() + 1, &readfds, NULL, NULL, NULL);
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
 
       /*Data arrives on Master socket only when new client connects with the
        * server (that is, 'connect' call is invoked on client side)*/
-      fprintf(stderr, "New connection recieved recvd, accept the connection\n");
+      fprintf(stderr, "New connection received received, accept the connection\n");
 
       data_socket = accept(connection_socket, NULL, NULL);
 
@@ -204,6 +204,10 @@ int main(int argc, char *argv[]) {
         routing_table_print();
       else if (op_code == 'Q')
         exit(0);
+      else if (op_code == 'H' ) {
+	printf("H - help\nC - create an entry, \n"
+	       "U - update an entry\nD - delete an entry\nL - list all entries\n")
+      }
       else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
         route_t route;
         sync_msg_t msg;
@@ -221,11 +225,11 @@ int main(int argc, char *argv[]) {
             routing_table_routes_add(&route);
           } else {
             routing_table_routes_update(&route);
-          }
+         }
         } else if (op_code == 'D') {
           routing_table_routes_delete(&route);
         }
-        // sync the entry with all teh clients:
+        // sync the entry with all the clients:
         msg.op_code = op_code;
         msg.route = route;
 
@@ -245,8 +249,7 @@ int main(int argc, char *argv[]) {
         }
       }
 
-    } else /* Data srrives on some other client FD*/
-    {
+    } else { // Data strives on some other client FD*/
       /*Find the client which has send us the data request*/
       i = 0, comm_socket_fd = -1;
       for (; i < MAX_CLIENT_SUPPORTED; i++) {
@@ -254,7 +257,7 @@ int main(int argc, char *argv[]) {
         if (FD_ISSET(monitored_fd_set[i], &readfds)) {
           comm_socket_fd = monitored_fd_set[i];
 
-          /*Prepare the buffer to recv the data*/
+          /*Prepare the buffer to receive the data*/
           memset(buffer, 0, BUFFER_SIZE);
 
           /* Wait for next data packet. */

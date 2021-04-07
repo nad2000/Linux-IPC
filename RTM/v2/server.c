@@ -209,6 +209,10 @@ int main(int argc, char *argv[]) {
       else if (op_code == 'Q') {
         routing_table_store();
         exit(0);
+      }
+      else if (op_code == 'H' ) {
+	printf("H - help\nC - create an entry, \n"
+	       "U - update an entry\nD - delete an entry\nL - list all entries\n");
       } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
         sync_msg_t msg;
 
@@ -219,7 +223,7 @@ int main(int argc, char *argv[]) {
         } else if (op_code == 'D') {
           routing_table_routes_delete(&route);
         }
-        // sync the entry with all teh clients:
+        // sync the entry with all the clients:
         msg.op_code = op_code;
         msg.route = route;
 

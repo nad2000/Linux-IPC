@@ -92,8 +92,9 @@ int read_arp_table() {
 
 int routing_table_print() {
   read_arp_table();
+  printf("#: DEST\tMASK\tGW\tMAC\tOIF\n");
   for (int i = 0; i < routing_table.route_count; i++)
-    printf("%d: %s/%d %s %s %s\n", i, routing_table.route[i].destination,
+    printf("%d: %s\t%d\t%s\t%s\t%s\n", i, routing_table.route[i].destination,
            (int)routing_table.route[i].mask, routing_table.route[i].gateway,
            arp_table.mac[i], routing_table.route[i].oif);
 
@@ -141,10 +142,16 @@ int inline routing_table_routes_add(route_t *route, char mac[18]) {
   strncpy(routing_table.route[position].gateway, route->gateway,
           GATEWAY_SIZE - 1);
   strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
-  add_mac(mac);
+
+  if (mac != NULL && strlen(mac) > 0) {
+	  add_mac(mac);
+	  fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination, route->mask,
+		  route->gateway, mac, route->oif);
+  } else {
+	  fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
+		  route->gateway, route->oif);
+  }
   routing_table.route_count++;
-  fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination, route->mask,
-          route->gateway, mac, route->oif);
 
   return position;
 }
