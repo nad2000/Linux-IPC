@@ -69,5 +69,6 @@ int routing_table_routes_lookup(route_t *route_t);
 int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
 int routing_table_routes_delete(route_t *route);
+void close_arp_shm();
 
 #endif /* !FILE_RTM_SEEN */

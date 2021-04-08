@@ -163,9 +163,11 @@ int main(int argc, char *argv[]) {
   char buffer[BUFFER_SIZE];
   fd_set readfds;
   int comm_socket_fd, i;
+  routing_table_init();
 
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);
+
   routing_table_load();
   rl_callback_handler_install("# ", (rl_vcpfunc_t *)&rl_cb);
 
@@ -263,6 +265,7 @@ int main(int argc, char *argv[]) {
       rl_callback_read_char();
       if (quit) {
         routing_table_store();
+        close_arp_shm();
         exit(0);
       }
 
