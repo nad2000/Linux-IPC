@@ -16,7 +16,6 @@ int create_and_write_shared_memory(
     /*Create a shared memory object in kernel space. If shared memory already
      * exists it will truncate it to zero bytes again*/
     shm_fd = shm_open(mmap_key, O_CREAT | O_RDWR | O_TRUNC, 0660);
-    
     if (shm_fd < 0) {
         printf("failure on shm_open on shm_fd, errcode = %d\n", errno);
         return -1;

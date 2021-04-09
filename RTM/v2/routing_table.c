@@ -14,10 +14,11 @@ static void *shm_reg;
 
 int create_arp_table() {
 
+  memset(&arp_table, 0, arp_table_size);
+
   /*Create a shared memory object in kernel space. If shared memory already
    * exists it will truncate it to zero bytes again*/
   shm_fd = shm_open(ARP_TABLE_KEY, O_CREAT | O_RDWR | O_TRUNC, 0660);
-
   if (shm_fd < 0) {
     printf("failure on shm_open on shm_fd, errcode = %d\n", errno);
     return -1;
@@ -55,7 +56,6 @@ void close_arp_shm() {
 
 void routing_table_init() {
   memset(&routing_table, 0, sizeof(routing_table));
-  memset(&arp_table, 0, arp_table_size);
   create_arp_table();
 }
 
@@ -180,7 +180,7 @@ int inline routing_table_routes_update(route_t *route, char mac[18]) {
   return -1;
 }
 
-int inline routing_table_routes_delete(route_t *route) {
+int inline routing_table_routes_delete(route_t *route, bool include_mac) {
   int position = routing_table_routes_lookup(route);
   if (position > -1) {
     /* memmove(routing_table.route + position * sizeof(route_t),
@@ -194,7 +194,8 @@ int inline routing_table_routes_delete(route_t *route) {
     for (int i = position + 1; i < routing_table.route_count; i++)
       routing_table.route[i - 1] = routing_table.route[i];
     routing_table.route_count--;
-    delete_mac(position);
+    if (include_mac)
+      delete_mac(position);
     return routing_table.route_count;
   }
   perror("the routing table does not have this route");
@@ -243,20 +244,46 @@ char parse_route(char *buffer, route_t *route, char mac[18]) {
   char op_code = toupper(token[0]);
 
   if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
+    char ip_address[20];
+
     // route_t route;
     token = strtok(NULL, " ");
-    strncpy(route->destination, token, DESTINATION_SIZE);
-    token = strtok(NULL, "/");
-    route->mask = (char)atoi(token);
+    if (!token) {
+      fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
+      return (char)0;
+    }
+    strncpy(ip_address, token, DESTINATION_SIZE);
 
     if (op_code == 'C' || op_code == 'U') {
       token = strtok(NULL, " ");
+      if (!token) {
+        fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
+        return (char)0;
+      }
       strncpy(route->gateway, token, GATEWAY_SIZE);
       token = strtok(NULL, " ");
+      if (!token) {
+        fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
+        return (char)0;
+      }
       strncpy(mac, token, 17);
       token = strtok(NULL, " ");
+      if (!token) {
+        fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
+        return (char)0;
+      }
       strncpy(route->oif, token, OIF_SIZE);
     }
+
+    token = strtok(ip_address, "/");
+    if (!token) {
+      fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
+      return (char)0;
+    }
+    strncpy(route->destination, token, DESTINATION_SIZE);
+
+    token = strtok(NULL, "/");
+    route->mask = token ? (char)atoi(token) : (char)255;
   }
   return op_code;
 }

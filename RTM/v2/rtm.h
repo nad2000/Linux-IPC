@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <memory.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
@@ -23,7 +24,7 @@
 #define GATEWAY_SIZE 16
 #define OIF_SIZE 32
 
-typedef enum { CREATE = 'C', UPDATE = 'U', DELETE = 'D' } OPCODE;
+typedef enum { CREATE = 'C', UPDATE = 'U', DELETE = 'D', LIST = 'L' } OPCODE;
 
 typedef struct _route {
   char destination[16];
@@ -68,7 +69,7 @@ int dump_rounting_table(int fd);
 int routing_table_routes_lookup(route_t *route_t);
 int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
-int routing_table_routes_delete(route_t *route);
+int routing_table_routes_delete(route_t *route, bool include_mac);
 void close_arp_shm();
 
 #endif /* !FILE_RTM_SEEN */

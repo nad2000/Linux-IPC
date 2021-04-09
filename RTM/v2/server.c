@@ -86,7 +86,10 @@ static int get_max_fd() {
 
 int quit = false;
 void rl_cb(char *line) {
+
+  sync_msg_t msg;
   route_t route;
+
   char op_code;
   char mac[18];
 
@@ -97,29 +100,40 @@ void rl_cb(char *line) {
 
   op_code = parse_route(line, &route, mac);
 
-  if (op_code == 'L')
-    routing_table_print();
-  else if (op_code == 'A')
+  switch (op_code) {
+
+  case 'A':
     arp_table_print();
-  else if (op_code == 'Q') {
+    break;
+  case 'Q':
     quit = true;
     return;
-  } else if (op_code == 'H') {
-    printf("H - help\nC - create an entry, \n"
-           "U - update an entry\nD - delete an entry\nL - list all entries\n");
-  } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
-    sync_msg_t msg;
+    break;
+  case 'H':
+    printf("c[reate] - create an entry,\n"
+           "d[elete] - delete an entry\n"
+           "h[elp] - help\n"
+           "l[ist] - list all entries\n"
+           "u[date] - update an entry\n");
+    break;
+  case 'L':
+    routing_table_print();
+  case 'C':
+  case 'U':
+  case 'D':
 
-    if (op_code == 'C') {
+    if (op_code == 'C')
       routing_table_routes_add(&route, mac);
-    } else if (op_code == 'U') {
+    else if (op_code == 'U')
       routing_table_routes_update(&route, mac);
-    } else if (op_code == 'D') {
-      routing_table_routes_delete(&route);
-    }
+    else if (op_code == 'D')
+      routing_table_routes_delete(&route, true);
     // sync the entry with all the clients:
     msg.op_code = op_code;
-    msg.route = route;
+    if (op_code == 'L')
+      memset(&msg.route, 0, sizeof(route_t));
+    else
+      msg.route = route;
 
     for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
 
@@ -181,7 +195,6 @@ int main(int argc, char *argv[]) {
 
   /*SOCK_DGRAM for Datagram based communication*/
   connection_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-
   if (connection_socket == -1) {
     perror("socket");
     exit(EXIT_FAILURE);

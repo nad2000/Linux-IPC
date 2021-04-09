@@ -1,5 +1,6 @@
 #include "rtm.h"
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,13 +56,16 @@ int main(int argc, char *argv[]) {
     }
     switch (msg.op_code) {
     case 'C':
-      routing_table_routes_add(&msg.route);
+      routing_table_routes_add(&msg.route, "");
       break;
     case 'U':
-      routing_table_routes_update(&msg.route);
+      routing_table_routes_update(&msg.route, "");
       break;
     case 'D':
-      routing_table_routes_delete(&msg.route);
+      routing_table_routes_delete(&msg.route, false);
+      break;
+    case 'L':
+      routing_table_print();
       break;
     }
   };
