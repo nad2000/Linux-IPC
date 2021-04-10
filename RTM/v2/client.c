@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "The server is down.\n");
     exit(EXIT_FAILURE);
   }
+  open_arp_table_ro();
 
   // Read dumped routeing table
   sync_msg_t msg;

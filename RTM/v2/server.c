@@ -21,6 +21,9 @@ int monitored_fd_set[MAX_CLIENT_SUPPORTED];
  * maintained in this client array.*/
 int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
+bool debug = false;
+char *routing_table_filename = ROUTING_TABLE_FILENAME;
+
 /*Remove all the FDs, if any, from the the array*/
 static void intitiaze_monitor_fd_set() {
 
@@ -105,6 +108,10 @@ void rl_cb(char *line) {
   case 'A':
     arp_table_print();
     break;
+  case 'S':
+  case 'W':
+    routing_table_store();
+    break;
   case 'Q':
     quit = true;
     return;
@@ -143,11 +150,10 @@ void rl_cb(char *line) {
       if (ret == -1) {
         perror("failed to sync a route");
         exit(EXIT_FAILURE);
-      } else {
+      } else if (debug)
         fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
                 route.destination, route.mask, route.gateway, mac, route.oif,
                 monitored_fd_set[i]);
-      }
     }
   }
 
@@ -177,6 +183,32 @@ int main(int argc, char *argv[]) {
   char buffer[BUFFER_SIZE];
   fd_set readfds;
   int comm_socket_fd, i;
+  int c;
+
+  while ((c = getopt(argc, argv, "dhf:")) != -1)
+    switch (c) {
+    case 'd':
+      debug = true;
+      break;
+    case 'f':
+      routing_table_filename = optarg;
+      break;
+    case 'h':
+      printf("Usage: %s [-d] [-h]\n\n -d - show debuging info\n"
+             " -f [FILE] - the file with the stored routes (default: '%s')\n"
+             " -h - show this help\n",
+             argv[0], ROUTING_TABLE_FILENAME);
+      return 0;
+    case '?':
+      if (optopt == 'f')
+        fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+      else if (isprint(optopt))
+        fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+      else
+        fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+      return 1;
+    }
+
   routing_table_init();
 
   intitiaze_monitor_fd_set();
@@ -200,7 +232,8 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  fprintf(stderr, "Master socket created\n");
+  if (debug)
+    fprintf(stderr, "Master socket created\n");
 
   /*initialize*/
   memset(&name, 0, sizeof(struct sockaddr_un));
@@ -223,7 +256,8 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  fprintf(stderr, "bind() call succeed\n");
+  if (debug)
+    fprintf(stderr, "bind() call succeed\n");
   /*
    * Prepare for accepting connections. The backlog size is set
    * to 20. So while one request is being processed other requests
@@ -246,7 +280,8 @@ int main(int argc, char *argv[]) {
   for (;;) {
     refresh_fd_set(&readfds); /*Copy the entire monitored FDs to readfds*/
     /* Wait for incoming connection. */
-    fprintf(stderr, "Waiting on select() sys call\n");
+    if (debug)
+      fprintf(stderr, "Waiting on select() sys call\n");
 
     /* Call the select system call, server process blocks here.
      * Linux OS keeps this process blocked untill the connection initiation
@@ -259,7 +294,9 @@ int main(int argc, char *argv[]) {
 
       /*Data arrives on Master socket only when new client connects with the
        * server (that is, 'connect' call is invoked on client side)*/
-      fprintf(stderr, "New connection recieved recvd, accept the connection\n");
+      if (debug)
+        fprintf(stderr,
+                "New connection recieved recvd, accept the connection\n");
 
       data_socket = accept(connection_socket, NULL, NULL);
 
@@ -268,8 +305,9 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
       }
 
-      fprintf(stderr, "Connection accepted from client. Data socket: %d\n",
-              data_socket);
+      if (debug)
+        fprintf(stderr, "Connection accepted from client. Data socket: %d\n",
+                data_socket);
 
       add_to_monitored_fd_set(data_socket);
       dump_rounting_table(data_socket);
@@ -297,7 +335,8 @@ int main(int argc, char *argv[]) {
           /* Wait for next data packet. */
           /*Server is blocked here. Waiting for the data to arrive from client
            * 'read' is a blocking system call*/
-          fprintf(stderr, "Waiting for data from the client\n");
+          if (debug)
+            fprintf(stderr, "Waiting for data from the client\n");
           ret = read(comm_socket_fd, buffer, BUFFER_SIZE);
 
           if (ret == -1) {
@@ -312,7 +351,8 @@ int main(int argc, char *argv[]) {
             memset(buffer, 0, BUFFER_SIZE);
             sprintf(buffer, "Result = %d", client_result[i]);
 
-            fprintf(stderr, "sending final result back to client\n");
+            if (debug)
+              fprintf(stderr, "sending final result back to client\n");
             ret = write(comm_socket_fd, buffer, BUFFER_SIZE);
             if (ret == -1) {
               perror("write");
@@ -334,7 +374,8 @@ int main(int argc, char *argv[]) {
   /*close the master socket*/
   close(connection_socket);
   remove_from_monitored_fd_set(connection_socket);
-  fprintf(stderr, "connection closed..\n");
+  if (debug)
+    fprintf(stderr, "connection closed..\n");
 
   /* Server should release resources before getting terminated.
    * Unlink the socket. */

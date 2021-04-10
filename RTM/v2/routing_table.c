@@ -154,11 +154,13 @@ int inline routing_table_routes_add(route_t *route, char mac[18]) {
 
   if (mac != NULL && strlen(mac) > 0) {
     add_mac(mac);
-    fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination,
-            route->mask, route->gateway, mac, route->oif);
+    if (debug)
+      fprintf(stderr, "CREATED: %s/%d %s %s %s\n", route->destination,
+              route->mask, route->gateway, mac, route->oif);
   } else {
-    fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
-            route->gateway, route->oif);
+    if (debug)
+      fprintf(stderr, "CREATED: %s/%d %s %s\n", route->destination, route->mask,
+              route->gateway, route->oif);
   }
   routing_table.route_count++;
 
@@ -171,9 +173,10 @@ int inline routing_table_routes_update(route_t *route, char mac[18]) {
     strncpy(routing_table.route[position].gateway, route->gateway,
             GATEWAY_SIZE - 1);
     strncpy(routing_table.route[position].oif, route->oif, OIF_SIZE - 1);
-    fprintf(stderr, "UPDATED: %s/%d %s %s to %s %s\n", route->destination,
-            route->mask, routing_table.route[position].gateway,
-            routing_table.route[position].oif, route->gateway, route->oif);
+    if (debug)
+      fprintf(stderr, "UPDATED: %s/%d %s %s to %s %s\n", route->destination,
+              route->mask, routing_table.route[position].gateway,
+              routing_table.route[position].oif, route->gateway, route->oif);
     return position;
   }
   perror("the routing table does not have this route");
@@ -186,11 +189,12 @@ int inline routing_table_routes_delete(route_t *route, bool include_mac) {
     /* memmove(routing_table.route + position * sizeof(route_t),
             routing_table.route + (position + 1) * sizeof(route_t),
             (routing_table.route_count - position - 1) * sizeof(route_t)); */
-    fprintf(stderr, "DELETED: %s/%d %s %s %s\n",
-            routing_table.route[position].destination,
-            routing_table.route[position].mask,
-            routing_table.route[position].gateway, arp_table.mac[position],
-            routing_table.route[position].oif);
+    if (debug)
+      fprintf(stderr, "DELETED: %s/%d %s %s %s\n",
+              routing_table.route[position].destination,
+              routing_table.route[position].mask,
+              routing_table.route[position].gateway, arp_table.mac[position],
+              routing_table.route[position].oif);
     for (int i = position + 1; i < routing_table.route_count; i++)
       routing_table.route[i - 1] = routing_table.route[i];
     routing_table.route_count--;
@@ -296,24 +300,25 @@ char read_route(int fd, route_t *route, char mac[18]) {
   ret = read(fd, buffer, BUFFER_SIZE);
   if (ret == 1)
     return (char)0;
+  // if (debug) {
   if (fd == 0)
     fprintf(stderr, "Input read from console : %s\n", buffer);
   else
     fprintf(stderr, "Input read from %d : %s\n", fd, buffer);
+  // }
   return parse_route(buffer, route, mac);
 }
 
 int routing_table_load() {
-  if (access(ROUTING_TABLE_FILENAME, R_OK) != -1) {
+  if (access(routing_table_filename, R_OK) != -1) {
 
     route_t route;
     char op_code;
     char mac[18];
 
-    int fd = open(ROUTING_TABLE_FILENAME, O_RDONLY);
-    do {
-      op_code = read_route(fd, &route, mac);
-    } while (op_code == 'C');
+    int fd = open(routing_table_filename, O_RDONLY);
+    while ((op_code = read_route(fd, &route, mac)) == 'C')
+      routing_table_routes_add(&route, mac);
     return close(fd);
   }
   return -1;
@@ -321,9 +326,9 @@ int routing_table_load() {
 
 int routing_table_store() {
 
-  FILE *fd = fopen(ROUTING_TABLE_FILENAME, "w");
+  FILE *fd = fopen(routing_table_filename, "w");
   for (int i = 0; i < routing_table.route_count; i++) {
-    fprintf(fd, "C %s/%d %s %s %s", routing_table.route[i].destination,
+    fprintf(fd, "C %s/%d %s %s %s\n", routing_table.route[i].destination,
             routing_table.route[i].mask, routing_table.route[i].gateway,
             arp_table.mac[i], routing_table.route[i].oif);
   }

@@ -72,4 +72,7 @@ int routing_table_routes_update(route_t *route, char mac[18]);
 int routing_table_routes_delete(route_t *route, bool include_mac);
 void close_arp_shm();
 
+extern bool debug;
+extern char *routing_table_filename;
+
 #endif /* !FILE_RTM_SEEN */
