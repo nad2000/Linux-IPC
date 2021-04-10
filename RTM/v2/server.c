@@ -21,9 +21,6 @@ int monitored_fd_set[MAX_CLIENT_SUPPORTED];
  * maintained in this client array.*/
 int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
-bool debug = false;
-char *routing_table_filename = ROUTING_TABLE_FILENAME;
-
 /*Remove all the FDs, if any, from the the array*/
 static void intitiaze_monitor_fd_set() {
 
@@ -112,10 +109,6 @@ void rl_cb(char *line) {
   case 'W':
     routing_table_store();
     break;
-  case 'Q':
-    quit = true;
-    return;
-    break;
   case 'H':
     printf("c[reate] - create an entry,\n"
            "d[elete] - delete an entry\n"
@@ -124,11 +117,14 @@ void rl_cb(char *line) {
            "u[date] - update an entry\n");
     break;
   case 'L':
-    routing_table_print();
+  case 'Q':
+    if (op_code == 'Q')
+      quit = true;
+    else
+      routing_table_print();
   case 'C':
   case 'U':
   case 'D':
-
     if (op_code == 'C')
       routing_table_routes_add(&route, mac);
     else if (op_code == 'U')
@@ -137,7 +133,7 @@ void rl_cb(char *line) {
       routing_table_routes_delete(&route, true);
     // sync the entry with all the clients:
     msg.op_code = op_code;
-    if (op_code == 'L')
+    if (op_code == 'L' || op_code == 'Q')
       memset(&msg.route, 0, sizeof(route_t));
     else
       msg.route = route;
@@ -185,7 +181,7 @@ int main(int argc, char *argv[]) {
   int comm_socket_fd, i;
   int c;
 
-  while ((c = getopt(argc, argv, "dhf:")) != -1)
+  while ((c = getopt(argc, argv, "dhf:t:")) != -1)
     switch (c) {
     case 'd':
       debug = true;
@@ -194,9 +190,11 @@ int main(int argc, char *argv[]) {
       routing_table_filename = optarg;
       break;
     case 'h':
-      printf("Usage: %s [-d] [-h]\n\n -d - show debuging info\n"
-             " -f [FILE] - the file with the stored routes (default: '%s')\n"
-             " -h - show this help\n",
+      printf("Usage: %s [-d] [-h] [-f FILE] [-t FILE]\n\n"
+             "\t-d - show debuging info\n"
+             "\t-f FILE - the file with the stored routes (default: '%s')\n"
+             "\t-t FILE - a test file with the stored commands\n"
+             "\t-h - show this help\n",
              argv[0], ROUTING_TABLE_FILENAME);
       return 0;
     case '?':
@@ -210,11 +208,11 @@ int main(int argc, char *argv[]) {
     }
 
   routing_table_init();
+  routing_table_load();
 
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);
 
-  routing_table_load();
   rl_callback_handler_install("# ", (rl_vcpfunc_t *)&rl_cb);
 
   /*In case the program exited inadvertently on the last run,

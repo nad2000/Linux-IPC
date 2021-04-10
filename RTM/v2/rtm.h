@@ -24,7 +24,14 @@
 #define GATEWAY_SIZE 16
 #define OIF_SIZE 32
 
-typedef enum { CREATE = 'C', UPDATE = 'U', DELETE = 'D', LIST = 'L' } OPCODE;
+typedef enum {
+  ARP = 'A',
+  CREATE = 'C',
+  DELETE = 'D',
+  LIST = 'L',
+  QUIT = 'Q',
+  UPDATE = 'U'
+} OPCODE;
 
 typedef struct _route {
   char destination[16];
@@ -70,9 +77,12 @@ int routing_table_routes_lookup(route_t *route_t);
 int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
 int routing_table_routes_delete(route_t *route, bool include_mac);
+int open_arp_table_ro();
 void close_arp_shm();
 
 extern bool debug;
 extern char *routing_table_filename;
+extern int shm_fd;
+extern void *shm_reg;
 
 #endif /* !FILE_RTM_SEEN */

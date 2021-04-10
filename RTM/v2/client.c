@@ -10,10 +10,8 @@
 
 int main(int argc, char *argv[]) {
   struct sockaddr_un addr;
-  int i;
   int ret;
   int data_socket;
-  char buffer[BUFFER_SIZE];
 
   /* Create data socket. */
 
@@ -56,6 +54,9 @@ int main(int argc, char *argv[]) {
       break;
     }
     switch (msg.op_code) {
+    case 'A':
+      arp_table_print();
+      break;
     case 'C':
       routing_table_routes_add(&msg.route, "");
       break;
@@ -68,54 +69,17 @@ int main(int argc, char *argv[]) {
     case 'L':
       routing_table_print();
       break;
+    case 'Q':
+      fprintf(stderr, "Server has quit...");
+      goto QUIT;
     }
   };
 
-  /* Send arguments. */
-  do {
-    printf("Enter number to send to server :\n");
-    scanf("%d", &i);
-    ret = write(data_socket, &i,
-                sizeof(int)); // alternative system calls: sendmsg(), sendto()
-    if (ret == -1) {
-      perror("write");
-      break;
-    }
-    printf("No of bytes sent = %d, data sent = %d\n", ret, i);
-  } while (i);
+QUIT:
 
-  /* Request result. */
-
-  memset(buffer, 0, BUFFER_SIZE);
-  strncpy(buffer, "RES", strlen("RES"));
-  buffer[strlen(buffer)] = '\0';
-  printf("buffer = %s\n", buffer);
-
-  ret = write(data_socket, buffer, strlen(buffer));
-  if (ret == -1) {
-    perror("write");
-    exit(EXIT_FAILURE);
-  }
-
-  /* Receive result. */
-  memset(buffer, 0, BUFFER_SIZE);
-
-  ret = read(data_socket, buffer, BUFFER_SIZE);
-  if (ret == -1) {
-    perror("read");
-    exit(EXIT_FAILURE);
-  }
-
-  /* Ensure buffer is 0-terminated. */
-
-  buffer[BUFFER_SIZE - 1] = 0;
-
-  printf("Result = %s\n", buffer);
-
-  /* Close socket. */
-
+  close_arp_shm();
   close(data_socket);
   fflush(stdout);
-
+  fflush(stderr);
   exit(EXIT_SUCCESS);
 }

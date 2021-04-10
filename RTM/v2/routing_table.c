@@ -8,9 +8,11 @@
 routing_table_t routing_table;
 arp_table_t arp_table;
 const int arp_table_size = sizeof(arp_table);
+bool debug = false;
+char *routing_table_filename = ROUTING_TABLE_FILENAME;
 
-static int shm_fd;
-static void *shm_reg;
+int shm_fd;
+void *shm_reg;
 
 int create_arp_table() {
 
