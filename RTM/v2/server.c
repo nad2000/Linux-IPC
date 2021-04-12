@@ -110,13 +110,12 @@ void rl_cb(char *line) {
     routing_table_store();
     break;
   case 'H':
-    printf(
-      "c[reate] - create an entry\n"
-      "d[elete] - delete an entry\n"
-      "h[elp] - help\n"
-      "l[ist] - list all entries\n"
-      "s[ave]/w[rite] - save the routing page into the storage file\n"
-      "u[date] - update an entry\n");
+    printf("c[reate] - create an entry\n"
+           "d[elete] - delete an entry\n"
+           "h[elp] - help\n"
+           "l[ist] - list all entries\n"
+           "s[ave]/w[rite] - save the routing page into the storage file\n"
+           "u[date] - update an entry\n");
     break;
   case 'L':
   case 'Q':
@@ -131,8 +130,13 @@ void rl_cb(char *line) {
       routing_table_routes_add(&route, mac);
     else if (op_code == 'U')
       routing_table_routes_update(&route, mac);
-    else if (op_code == 'D')
-      routing_table_routes_delete(&route, true);
+    else if (op_code == 'D') {
+      if (is_all_digitsn(route.destination, sizeof(route.destination))) {
+        int idx = atoi(route.destination);
+        routing_table_routes_delete_by_idx(idx, true);
+      } else
+        routing_table_routes_delete(&route, true);
+    }
     // sync the entry with all the clients:
     msg.op_code = op_code;
     if (op_code == 'L' || op_code == 'Q')

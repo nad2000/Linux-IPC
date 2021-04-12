@@ -14,6 +14,19 @@ char *routing_table_filename = ROUTING_TABLE_FILENAME;
 int shm_fd;
 void *shm_reg;
 
+bool inline is_all_digitsn(char data[], int n) {
+  bool all_digits = true;
+  for (int i = 0; i < n; i++) {
+    if (!data[i])
+      break;
+    if (data[i] < '0' || data[i] > '9') {
+      all_digits = false;
+      break;
+    }
+  }
+  return all_digits;
+}
+
 int create_arp_table() {
 
   memset(&arp_table, 0, arp_table_size);
@@ -188,24 +201,28 @@ int inline routing_table_routes_update(route_t *route, char mac[18]) {
 int inline routing_table_routes_delete(route_t *route, bool include_mac) {
   int position = routing_table_routes_lookup(route);
   if (position > -1) {
-    /* memmove(routing_table.route + position * sizeof(route_t),
-            routing_table.route + (position + 1) * sizeof(route_t),
-            (routing_table.route_count - position - 1) * sizeof(route_t)); */
-    if (debug)
-      fprintf(stderr, "DELETED: %s/%d %s %s %s\n",
-              routing_table.route[position].destination,
-              routing_table.route[position].mask,
-              routing_table.route[position].gateway, arp_table.mac[position],
-              routing_table.route[position].oif);
-    for (int i = position + 1; i < routing_table.route_count; i++)
-      routing_table.route[i - 1] = routing_table.route[i];
-    routing_table.route_count--;
-    if (include_mac)
-      delete_mac(position);
-    return routing_table.route_count;
+    return routing_table_routes_delete_by_idx(position, include_mac);
   }
   perror("the routing table does not have this route");
   return -1;
+}
+
+int inline routing_table_routes_delete_by_idx(int position, bool include_mac) {
+  if (debug)
+    fprintf(stderr, "DELETED: %s/%d %s %s %s\n",
+            routing_table.route[position].destination,
+            routing_table.route[position].mask,
+            routing_table.route[position].gateway, arp_table.mac[position],
+            routing_table.route[position].oif);
+  memmove(routing_table.route + position * sizeof(route_t),
+          routing_table.route + (position + 1) * sizeof(route_t),
+          (routing_table.route_count - position - 1) * sizeof(route_t));
+  for (int i = position + 1; i < routing_table.route_count; i++)
+    routing_table.route[i - 1] = routing_table.route[i];
+  routing_table.route_count--;
+  if (include_mac)
+    delete_mac(position);
+  return routing_table.route_count;
 }
 
 int add_mac(char *mac) {

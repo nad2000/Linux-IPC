@@ -65,7 +65,13 @@ int main(int argc, char *argv[]) {
       routing_table_routes_update(&msg.route, "");
       break;
     case 'D':
-      routing_table_routes_delete(&msg.route, false);
+      // destination is the index in the table
+      if (is_all_digitsn(msg.route.destination,
+                         sizeof(msg.route.destination))) {
+        int idx = atoi(msg.route.destination);
+        routing_table_routes_delete_by_idx(idx, false);
+      } else
+        routing_table_routes_delete(&msg.route, false);
       break;
     case 'L':
       routing_table_print();

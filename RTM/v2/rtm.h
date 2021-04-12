@@ -50,6 +50,7 @@ typedef struct _arp_table {
 } arp_table_t;
 
 void routing_table_init();
+bool is_all_digitsn(char data[], int n);
 
 /* int routing_table_lookup_route(char destination[16], char mask); */
 /* int routing_table_add_route(char destination[16], char mask, char
@@ -71,6 +72,7 @@ int routing_table_routes_lookup(route_t *route_t);
 int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
 int routing_table_routes_delete(route_t *route, bool include_mac);
+int routing_table_routes_delete_by_idx(int idx, bool include_mac);
 int open_arp_table_ro();
 void close_arp_shm();
 
