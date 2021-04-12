@@ -110,11 +110,13 @@ void rl_cb(char *line) {
     routing_table_store();
     break;
   case 'H':
-    printf("c[reate] - create an entry,\n"
-           "d[elete] - delete an entry\n"
-           "h[elp] - help\n"
-           "l[ist] - list all entries\n"
-           "u[date] - update an entry\n");
+    printf(
+      "c[reate] - create an entry\n"
+      "d[elete] - delete an entry\n"
+      "h[elp] - help\n"
+      "l[ist] - list all entries\n"
+      "s[ave]/w[rite] - save the routing page into the storage file\n"
+      "u[date] - update an entry\n");
     break;
   case 'L':
   case 'Q':

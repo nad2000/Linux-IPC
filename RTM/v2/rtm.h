@@ -24,14 +24,7 @@
 #define GATEWAY_SIZE 16
 #define OIF_SIZE 32
 
-typedef enum {
-  ARP = 'A',
-  CREATE = 'C',
-  DELETE = 'D',
-  LIST = 'L',
-  QUIT = 'Q',
-  UPDATE = 'U'
-} OPCODE;
+#pragma pack(1)
 
 typedef struct _route {
   char destination[16];
@@ -41,9 +34,10 @@ typedef struct _route {
 } route_t;
 
 typedef struct _sync_msg {
-  OPCODE op_code;
   route_t route;
+  char op_code;
 } sync_msg_t;
+#pragma pack(0)
 
 typedef struct _routinge_table {
   int route_count;
@@ -65,7 +59,7 @@ void routing_table_init();
 /*                                char gateway[16], char oif[32]); */
 /* int routing_table_delete_route(char destination[16], char mask); */
 char parse_route(char *buffer, route_t *route, char mac[18]);
-char read_route(int fd, route_t *route, char mac[18]);
+char read_route(FILE *fp, route_t *route, char mac[18]);
 int routing_table_print();
 int routing_table_store();
 int routing_table_load();

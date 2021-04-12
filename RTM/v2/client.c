@@ -46,6 +46,7 @@ int main(int argc, char *argv[]) {
 
   // Read dumped routeing table
   sync_msg_t msg;
+  printf("msg: %lu, route: %lu\n\n\n", sizeof(sync_msg_t), sizeof(route_t));
   for (;;) {
     memset(&msg, 0, sizeof(sync_msg_t));
     ret = read(data_socket, &msg, sizeof(sync_msg_t));

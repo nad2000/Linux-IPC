@@ -117,7 +117,7 @@ int dump_rounting_table(int fd) {
   sync_msg_t msg;
 
   for (int i = 0; i < routing_table.route_count; i++) {
-    msg.op_code = CREATE;
+    msg.op_code = 'C';
     msg.route = routing_table.route[i];
     int ret = write(fd, &msg, sizeof(sync_msg_t));
     if (ret == -1) {
@@ -245,6 +245,9 @@ int arp_table_print() {
 
 char parse_route(char *buffer, route_t *route, char mac[18]) {
   char *token = strtok(buffer, " ");
+  // if (!token)
+  //   return (char)0;
+  // token = strtok(buffer, " ");
   if (!token)
     return (char)0;
   char op_code = toupper(token[0]);
@@ -273,7 +276,7 @@ char parse_route(char *buffer, route_t *route, char mac[18]) {
         return (char)0;
       }
       strncpy(mac, token, 17);
-      token = strtok(NULL, " ");
+      token = strtok(NULL, "\n");
       if (!token) {
         fprintf(stderr, "ERROR: Incorrect input '%s'", buffer);
         return (char)0;
@@ -294,19 +297,19 @@ char parse_route(char *buffer, route_t *route, char mac[18]) {
   return op_code;
 }
 
-char read_route(int fd, route_t *route, char mac[18]) {
+char read_route(FILE *fp, route_t *route, char mac[18]) {
   char buffer[BUFFER_SIZE];
-  int ret;
+  char *ret;
 
   memset(buffer, 0, BUFFER_SIZE);
-  ret = read(fd, buffer, BUFFER_SIZE);
-  if (ret == 1)
+  ret = fgets(buffer, BUFFER_SIZE, fp);
+  if (ret == NULL)
     return (char)0;
   // if (debug) {
-  if (fd == 0)
+  if (fileno(fp) == 0)
     fprintf(stderr, "Input read from console : %s\n", buffer);
   else
-    fprintf(stderr, "Input read from %d : %s\n", fd, buffer);
+    fprintf(stderr, "Input read from %d : %s\n", fileno(fp), buffer);
   // }
   return parse_route(buffer, route, mac);
 }
@@ -318,21 +321,21 @@ int routing_table_load() {
     char op_code;
     char mac[18];
 
-    int fd = open(routing_table_filename, O_RDONLY);
-    while ((op_code = read_route(fd, &route, mac)) == 'C')
+    FILE *fp = fopen(routing_table_filename, "ro");
+    while ((op_code = read_route(fp, &route, mac)) == 'C')
       routing_table_routes_add(&route, mac);
-    return close(fd);
+    return fclose(fp);
   }
   return -1;
 }
 
 int routing_table_store() {
 
-  FILE *fd = fopen(routing_table_filename, "w");
+  FILE *fp = fopen(routing_table_filename, "w");
   for (int i = 0; i < routing_table.route_count; i++) {
-    fprintf(fd, "C %s/%d %s %s %s\n", routing_table.route[i].destination,
+    fprintf(fp, "C %s/%d %s %s %s\n", routing_table.route[i].destination,
             routing_table.route[i].mask, routing_table.route[i].gateway,
             arp_table.mac[i], routing_table.route[i].oif);
   }
-  return fclose(fd);
+  return fclose(fp);
 }
