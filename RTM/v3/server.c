@@ -1,6 +1,10 @@
 #include "rtm.h"
+
 #include <ctype.h>
 #include <fcntl.h>
+#include <readline/history.h>
+#include <readline/readline.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,12 +21,11 @@ int monitored_fd_set[MAX_CLIENT_SUPPORTED];
  * maintained in this client array.*/
 int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
-// Client PIDs:
-pid_t clients[MAX_CLIENT_SUPPORTED];
-
 /*Remove all the FDs, if any, from the the array*/
 static void intitiaze_monitor_fd_set() {
-  for (int i = 0; i < MAX_CLIENT_SUPPORTED; i++)
+
+  int i = 0;
+  for (; i < MAX_CLIENT_SUPPORTED; i++)
     monitored_fd_set[i] = -1;
 }
 
@@ -37,29 +40,6 @@ static void add_to_monitored_fd_set(int skt_fd) {
     monitored_fd_set[i] = skt_fd;
     break;
   }
-}
-
-static void add_client_pid(pid_t pid) {
-  int i = 0;
-  for (; i < MAX_CLIENT_SUPPORTED; i++) {
-    if (clients[i] != -1)
-      continue;
-    clients[i] = pid;
-    break;
-  }
-}
-
-static void add_client(int skt_fd) {
-  int ret;
-  pid_t pid;
-  ret = read(skt_fd, &pid, sizeof(pid_t));
-  if (ret == -1) {
-    perror("failed to get the client PID");
-    exit(-1);
-  }
-  fprintf(stderr, "Client PID: %d\n", pid);
-  add_client_pid(pid);
-  add_to_monitored_fd_set(skt_fd);
 }
 
 /*Remove the FD from monitored_fd_set array*/
@@ -104,6 +84,88 @@ static int get_max_fd() {
   return max;
 }
 
+int quit = false;
+void rl_cb(char *line) {
+
+  sync_msg_t msg;
+  route_t route;
+
+  char op_code;
+  char mac[18];
+
+  if (NULL == line) {
+    quit = true;
+    return;
+  }
+
+  op_code = parse_route(line, &route, mac);
+
+  switch (op_code) {
+
+  case 'A':
+    arp_table_print();
+    break;
+  case 'S':
+  case 'W':
+    routing_table_store();
+    break;
+  case 'H':
+    printf("c[reate] - create an entry\n"
+           "d[elete] - delete an entry\n"
+           "h[elp] - help\n"
+           "l[ist] - list all entries\n"
+           "s[ave]/w[rite] - save the routing page into the storage file\n"
+           "u[date] - update an entry\n");
+    break;
+  case 'L':
+  case 'Q':
+    if (op_code == 'Q')
+      quit = true;
+    else
+      routing_table_print();
+  case 'C':
+  case 'U':
+  case 'D':
+    if (op_code == 'C')
+      routing_table_routes_add(&route, mac);
+    else if (op_code == 'U')
+      routing_table_routes_update(&route, mac);
+    else if (op_code == 'D') {
+      if (is_all_digitsn(route.destination, sizeof(route.destination))) {
+        int idx = atoi(route.destination);
+        routing_table_routes_delete_by_idx(idx, true);
+      } else
+        routing_table_routes_delete(&route, true);
+    }
+    // sync the entry with all the clients:
+    msg.op_code = op_code;
+    if (op_code == 'L' || op_code == 'Q')
+      memset(&msg.route, 0, sizeof(route_t));
+    else
+      msg.route = route;
+
+    for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
+
+      if (monitored_fd_set[i] == -1)
+        break;
+      int ret = write(monitored_fd_set[i], &msg, sizeof(sync_msg_t));
+      if (ret == -1) {
+        perror("failed to sync a route");
+        exit(EXIT_FAILURE);
+      } else if (debug)
+        fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
+                route.destination, route.mask, route.gateway, mac, route.oif,
+                monitored_fd_set[i]);
+    }
+  }
+
+  if (strlen(line) > 0)
+    add_history(line);
+
+  // printf("You typed:\n%s\n", line);
+  free(line);
+}
+
 int main(int argc, char *argv[]) {
 
   struct sockaddr_un name;
@@ -116,7 +178,6 @@ int main(int argc, char *argv[]) {
 #endif
 
   int ret;
-  char op_code;
   int connection_socket;
   int data_socket;
   // int result;
@@ -124,13 +185,41 @@ int main(int argc, char *argv[]) {
   char buffer[BUFFER_SIZE];
   fd_set readfds;
   int comm_socket_fd, i;
+  int c;
+
+  while ((c = getopt(argc, argv, "dhf:t:")) != -1)
+    switch (c) {
+    case 'd':
+      debug = true;
+      break;
+    case 'f':
+      routing_table_filename = optarg;
+      break;
+    case 'h':
+      printf("Usage: %s [-d] [-h] [-f FILE] [-t FILE]\n\n"
+             "\t-d - show debuging info\n"
+             "\t-f FILE - the file with the stored routes (default: '%s')\n"
+             "\t-t FILE - a test file with the stored commands\n"
+             "\t-h - show this help\n",
+             argv[0], ROUTING_TABLE_FILENAME);
+      return 0;
+    case '?':
+      if (optopt == 'f')
+        fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+      else if (isprint(optopt))
+        fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+      else
+        fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+      return 1;
+    }
+
+  routing_table_init();
+  routing_table_load();
+
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);
 
-  routing_table_load();
-
-  for (int i = 0; i < MAX_CLIENT_SUPPORTED; i++)
-    clients[i] = (pid_t)-1;
+  rl_callback_handler_install("# ", (rl_vcpfunc_t *)&rl_cb);
 
   /*In case the program exited inadvertently on the last run,
    *remove the socket.
@@ -142,24 +231,24 @@ int main(int argc, char *argv[]) {
 
   /*SOCK_DGRAM for Datagram based communication*/
   connection_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-
   if (connection_socket == -1) {
     perror("socket");
     exit(EXIT_FAILURE);
   }
 
-  fprintf(stderr, "Master socket created\n");
+  if (debug)
+    fprintf(stderr, "Master socket created\n");
 
   /*initialize*/
   memset(&name, 0, sizeof(struct sockaddr_un));
 
-  /*Specify the socket Credentials*/
+  /*Specify the socket Cridentials*/
   name.sun_family = AF_UNIX;
   strncpy(name.sun_path, SOCKET_NAME, sizeof(name.sun_path) - 1);
 
   /* Bind socket to socket name.*/
   /* Purpose of bind() system call is that application() dictate the
-   * underlying operating system the criteria of receiving the data. Here,
+   * underlying operating system the criteria of recieving the data. Here,
    * bind() system call is telling the OS that if sender process sends the
    * data destined to socket "/tmp/DemoSocket", then such data needs to be
    * delivered to this server process (the server process)*/
@@ -171,7 +260,8 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  fprintf(stderr, "bind() call succeed\n");
+  if (debug)
+    fprintf(stderr, "bind() call succeed\n");
   /*
    * Prepare for accepting connections. The backlog size is set
    * to 20. So while one request is being processed other requests
@@ -189,13 +279,13 @@ int main(int argc, char *argv[]) {
 
   /* This is the main loop for handling connections. */
   /*All Server process usually runs 24 x 7. Good Servers should always up
-   * and running and should never go down. Have you ever seen Facebook Or
+   * and running and shold never go down. Have you ever seen Facebook Or
    * Google page failed to load ??*/
   for (;;) {
-    char mac[18];
     refresh_fd_set(&readfds); /*Copy the entire monitored FDs to readfds*/
     /* Wait for incoming connection. */
-    fprintf(stderr, "Waiting on select() sys call\n");
+    if (debug)
+      fprintf(stderr, "Waiting on select() sys call\n");
 
     /* Call the select system call, server process blocks here.
      * Linux OS keeps this process blocked untill the connection initiation
@@ -208,7 +298,9 @@ int main(int argc, char *argv[]) {
 
       /*Data arrives on Master socket only when new client connects with the
        * server (that is, 'connect' call is invoked on client side)*/
-      fprintf(stderr, "New connection received, accept the connection\n");
+      if (debug)
+        fprintf(stderr,
+                "New connection recieved recvd, accept the connection\n");
 
       data_socket = accept(connection_socket, NULL, NULL);
 
@@ -217,53 +309,19 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
       }
 
-      fprintf(stderr, "Connection accepted from client. Data socket: %d\n",
-              data_socket);
+      if (debug)
+        fprintf(stderr, "Connection accepted from client. Data socket: %d\n",
+                data_socket);
 
-      add_client(data_socket);
+      add_to_monitored_fd_set(data_socket);
       dump_rounting_table(data_socket);
     } else if (FD_ISSET(0, &readfds)) {
-      route_t route;
 
-      op_code = read_route(0, &route, mac);
-      if (!op_code)
-        continue;
-
-      if (op_code == 'L')
-        routing_table_print();
-      else if (op_code == 'A')
-        arp_table_print();
-      else if (op_code == 'Q') {
+      rl_callback_read_char();
+      if (quit) {
         routing_table_store();
+        close_arp_shm();
         exit(0);
-      } else if (op_code == 'C' || op_code == 'U' || op_code == 'D') {
-        sync_msg_t msg;
-
-        if (op_code == 'C') {
-          routing_table_routes_add(&route, mac);
-        } else if (op_code == 'U') {
-          routing_table_routes_update(&route, mac);
-        } else if (op_code == 'D') {
-          routing_table_routes_delete(&route);
-        }
-        // sync the entry with all teh clients:
-        msg.op_code = op_code;
-        msg.route = route;
-
-        for (int i = 2; i < MAX_CLIENT_SUPPORTED; i++) {
-
-          if (monitored_fd_set[i] == -1)
-            break;
-          int ret = write(monitored_fd_set[i], &msg, sizeof(sync_msg_t));
-          if (ret == -1) {
-            perror("failed to sync a route");
-            exit(EXIT_FAILURE);
-          } else {
-            fprintf(stderr, "Synced route %s/%d %s %s %s to %d\n",
-                    route.destination, route.mask, route.gateway, mac,
-                    route.oif, monitored_fd_set[i]);
-          }
-        }
       }
 
     } else /* Data srrives on some other client FD*/
@@ -281,7 +339,8 @@ int main(int argc, char *argv[]) {
           /* Wait for next data packet. */
           /*Server is blocked here. Waiting for the data to arrive from client
            * 'read' is a blocking system call*/
-          fprintf(stderr, "Waiting for data from the client\n");
+          if (debug)
+            fprintf(stderr, "Waiting for data from the client\n");
           ret = read(comm_socket_fd, buffer, BUFFER_SIZE);
 
           if (ret == -1) {
@@ -296,7 +355,8 @@ int main(int argc, char *argv[]) {
             memset(buffer, 0, BUFFER_SIZE);
             sprintf(buffer, "Result = %d", client_result[i]);
 
-            fprintf(stderr, "sending final result back to client\n");
+            if (debug)
+              fprintf(stderr, "sending final result back to client\n");
             ret = write(comm_socket_fd, buffer, BUFFER_SIZE);
             if (ret == -1) {
               perror("write");
@@ -318,7 +378,8 @@ int main(int argc, char *argv[]) {
   /*close the master socket*/
   close(connection_socket);
   remove_from_monitored_fd_set(connection_socket);
-  fprintf(stderr, "connection closed..\n");
+  if (debug)
+    fprintf(stderr, "connection closed..\n");
 
   /* Server should release resources before getting terminated.
    * Unlink the socket. */

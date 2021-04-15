@@ -1,5 +1,6 @@
 #include "rtm.h"
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,11 +10,8 @@
 
 int main(int argc, char *argv[]) {
   struct sockaddr_un addr;
-  int i;
-  pid_t pid;
   int ret;
   int data_socket;
-  char buffer[BUFFER_SIZE];
 
   /* Create data socket. */
 
@@ -44,13 +42,11 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "The server is down.\n");
     exit(EXIT_FAILURE);
   }
-
-  // send PID to the server:
-  pid = getpid();
-  ret = write(data_socket, &pid, sizeof(pid_t));
+  open_arp_table_ro();
 
   // Read dumped routeing table
   sync_msg_t msg;
+  printf("msg: %lu, route: %lu\n\n\n", sizeof(sync_msg_t), sizeof(route_t));
   for (;;) {
     memset(&msg, 0, sizeof(sync_msg_t));
     ret = read(data_socket, &msg, sizeof(sync_msg_t));
@@ -59,6 +55,9 @@ int main(int argc, char *argv[]) {
       break;
     }
     switch (msg.op_code) {
+    case 'A':
+      arp_table_print();
+      break;
     case 'C':
       routing_table_routes_add(&msg.route, "");
       break;
@@ -66,56 +65,28 @@ int main(int argc, char *argv[]) {
       routing_table_routes_update(&msg.route, "");
       break;
     case 'D':
-      routing_table_routes_delete(&msg.route);
+      // destination is the index in the table
+      if (is_all_digitsn(msg.route.destination,
+                         sizeof(msg.route.destination))) {
+        int idx = atoi(msg.route.destination);
+        routing_table_routes_delete_by_idx(idx, false);
+      } else
+        routing_table_routes_delete(&msg.route, false);
       break;
+    case 'L':
+      routing_table_print();
+      break;
+    case 'Q':
+      fprintf(stderr, "Server has quit...");
+      goto QUIT;
     }
   };
 
-  /* Send arguments. */
-  do {
-    printf("Enter number to send to server :\n");
-    scanf("%d", &i);
-    ret = write(data_socket, &i,
-                sizeof(int)); // alternative system calls: sendmsg(), sendto()
-    if (ret == -1) {
-      perror("write");
-      break;
-    }
-    printf("No of bytes sent = %d, data sent = %d\n", ret, i);
-  } while (i);
+QUIT:
 
-  /* Request result. */
-
-  memset(buffer, 0, BUFFER_SIZE);
-  strncpy(buffer, "RES", strlen("RES"));
-  buffer[strlen(buffer)] = '\0';
-  printf("buffer = %s\n", buffer);
-
-  ret = write(data_socket, buffer, strlen(buffer));
-  if (ret == -1) {
-    perror("write");
-    exit(EXIT_FAILURE);
-  }
-
-  /* Receive result. */
-  memset(buffer, 0, BUFFER_SIZE);
-
-  ret = read(data_socket, buffer, BUFFER_SIZE);
-  if (ret == -1) {
-    perror("read");
-    exit(EXIT_FAILURE);
-  }
-
-  /* Ensure buffer is 0-terminated. */
-
-  buffer[BUFFER_SIZE - 1] = 0;
-
-  printf("Result = %s\n", buffer);
-
-  /* Close socket. */
-
+  close_arp_shm();
   close(data_socket);
   fflush(stdout);
-
+  fflush(stderr);
   exit(EXIT_SUCCESS);
 }

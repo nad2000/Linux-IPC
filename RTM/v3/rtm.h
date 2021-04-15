@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <memory.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
@@ -23,7 +24,7 @@
 #define GATEWAY_SIZE 16
 #define OIF_SIZE 32
 
-typedef enum { CREATE = 'C', UPDATE = 'U', DELETE = 'D' } OPCODE;
+#pragma pack(1)
 
 typedef struct _route {
   char destination[16];
@@ -33,9 +34,10 @@ typedef struct _route {
 } route_t;
 
 typedef struct _sync_msg {
-  OPCODE op_code;
   route_t route;
+  char op_code;
 } sync_msg_t;
+#pragma pack(0)
 
 typedef struct _routinge_table {
   int route_count;
@@ -48,6 +50,7 @@ typedef struct _arp_table {
 } arp_table_t;
 
 void routing_table_init();
+bool is_all_digitsn(char data[], int n);
 
 /* int routing_table_lookup_route(char destination[16], char mask); */
 /* int routing_table_add_route(char destination[16], char mask, char
@@ -56,7 +59,8 @@ void routing_table_init();
 /* int routing_table_update_route(char destination[16], char mask, */
 /*                                char gateway[16], char oif[32]); */
 /* int routing_table_delete_route(char destination[16], char mask); */
-char read_route(int fd, route_t *route, char mac[18]);
+char parse_route(char *buffer, route_t *route, char mac[18]);
+char read_route(FILE *fp, route_t *route, char mac[18]);
 int routing_table_print();
 int routing_table_store();
 int routing_table_load();
@@ -67,6 +71,14 @@ int dump_rounting_table(int fd);
 int routing_table_routes_lookup(route_t *route_t);
 int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
-int routing_table_routes_delete(route_t *route);
+int routing_table_routes_delete(route_t *route, bool include_mac);
+int routing_table_routes_delete_by_idx(int idx, bool include_mac);
+int open_arp_table_ro();
+void close_arp_shm();
+
+extern bool debug;
+extern char *routing_table_filename;
+extern int shm_fd;
+extern void *shm_reg;
 
 #endif /* !FILE_RTM_SEEN */
