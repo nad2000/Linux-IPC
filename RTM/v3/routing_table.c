@@ -128,16 +128,25 @@ int routing_table_print() {
 int dump_rounting_table(int fd) {
 
   sync_msg_t msg;
+  int ret;
 
   for (int i = 0; i < routing_table.route_count; i++) {
     msg.op_code = 'C';
     msg.route = routing_table.route[i];
-    int ret = write(fd, &msg, sizeof(sync_msg_t));
+    ret = write(fd, &msg, sizeof(sync_msg_t));
     if (ret == -1) {
       perror("failed to sync a route");
       exit(EXIT_FAILURE);
     }
   }
+  memset(&msg, 0, sizeof(sync_msg_t));
+  msg.op_code = 'F';
+  ret = write(fd, &msg, sizeof(sync_msg_t));
+  if (ret == -1) {
+    perror("failed to send 'Finish Flushing'");
+    exit(EXIT_FAILURE);
+  }
+
   return routing_table.route_count;
 }
 

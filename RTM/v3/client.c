@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -46,7 +47,8 @@ int main(int argc, char *argv[]) {
 
   // Read dumped routeing table
   sync_msg_t msg;
-  printf("msg: %lu, route: %lu\n\n\n", sizeof(sync_msg_t), sizeof(route_t));
+  pid_t pid;
+
   for (;;) {
     memset(&msg, 0, sizeof(sync_msg_t));
     ret = read(data_socket, &msg, sizeof(sync_msg_t));
@@ -79,6 +81,16 @@ int main(int argc, char *argv[]) {
     case 'Q':
       fprintf(stderr, "Server has quit...");
       goto QUIT;
+    case 'F':
+      // F(inish) the flushing of the routing page and send PID back to the
+      // server
+      pid = getpid();
+      int ret = write(data_socket, &pid, sizeof(pid_t));
+      if (ret == -1) {
+        perror("failed to send PID");
+        exit(EXIT_FAILURE);
+      }
+      break;
     }
   };
 

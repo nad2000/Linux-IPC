@@ -21,6 +21,8 @@ int monitored_fd_set[MAX_CLIENT_SUPPORTED];
  * maintained in this client array.*/
 int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
+pid_t client_pids[MAX_CLIENT_SUPPORTED] = {-1};
+
 /*Remove all the FDs, if any, from the the array*/
 static void intitiaze_monitor_fd_set() {
 
@@ -30,7 +32,7 @@ static void intitiaze_monitor_fd_set() {
 }
 
 /*Add a new FD to the monitored_fd_set array*/
-static void add_to_monitored_fd_set(int skt_fd) {
+static int add_to_monitored_fd_set(int skt_fd) {
 
   int i = 0;
   for (; i < MAX_CLIENT_SUPPORTED; i++) {
@@ -40,6 +42,7 @@ static void add_to_monitored_fd_set(int skt_fd) {
     monitored_fd_set[i] = skt_fd;
     break;
   }
+  return i;
 }
 
 /*Remove the FD from monitored_fd_set array*/
@@ -114,8 +117,14 @@ void rl_cb(char *line) {
            "d[elete] - delete an entry\n"
            "h[elp] - help\n"
            "l[ist] - list all entries\n"
+           "p[rint] - print the list of all client PIDs\n"
            "s[ave]/w[rite] - save the routing page into the storage file\n"
            "u[date] - update an entry\n");
+    break;
+  case 'P':
+    printf("#\tPID\n");
+    for (int i=0; i<MAX_CLIENT_SUPPORTED; i++)
+	    if (client_pids[i] > 0) printf("%d\t%d\n", i, client_pids[i]);
     break;
   case 'L':
   case 'Q':
@@ -313,8 +322,17 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Connection accepted from client. Data socket: %d\n",
                 data_socket);
 
-      add_to_monitored_fd_set(data_socket);
+      int client_index = add_to_monitored_fd_set(data_socket);
       dump_rounting_table(data_socket);
+
+      pid_t pid = 0;
+      ret = read(data_socket, &pid, sizeof(pid_t));
+      if (ret == -1) {
+        perror("failed to recieve PID");
+        exit(EXIT_FAILURE);
+      }
+      fprintf(stderr, "Client PID=%d\n", pid);
+      client_pids[client_index] = pid;
     } else if (FD_ISSET(0, &readfds)) {
 
       rl_callback_read_char();
