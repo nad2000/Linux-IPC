@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <readline/history.h>
 #include <readline/readline.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+static char *initial_datat_filename = NULL;
 
 /*An array of File descriptors which the server process
  * is maintaining in order to talk with the connected clients.
@@ -108,6 +111,14 @@ void rl_cb(char *line) {
   case 'A':
     arp_table_print();
     break;
+  case 'F':
+    routing_table_flush(true);
+    // Signal all clients to flush their routing tables
+    for (int i = 1; i < MAX_CLIENT_SUPPORTED; i++) {
+      if (client_pids[i] > 0)
+        kill(client_pids[i], SIGUSR1);
+    }
+    break;
   case 'S':
   case 'W':
     routing_table_store();
@@ -115,6 +126,7 @@ void rl_cb(char *line) {
   case 'H':
     printf("c[reate] - create an entry\n"
            "d[elete] - delete an entry\n"
+           "f[lush] - flush the routing table\n"
            "h[elp] - help\n"
            "l[ist] - list all entries\n"
            "p[rint] - print the list of all client PIDs\n"
@@ -123,8 +135,9 @@ void rl_cb(char *line) {
     break;
   case 'P':
     printf("#\tPID\n");
-    for (int i=0; i<MAX_CLIENT_SUPPORTED; i++)
-	    if (client_pids[i] > 0) printf("%d\t%d\n", i, client_pids[i]);
+    for (int i = 0; i < MAX_CLIENT_SUPPORTED; i++)
+      if (client_pids[i] > 0)
+        printf("%d\t%d\n", i, client_pids[i]);
     break;
   case 'L':
   case 'Q':
@@ -196,7 +209,8 @@ int main(int argc, char *argv[]) {
   int comm_socket_fd, i;
   int c;
 
-  while ((c = getopt(argc, argv, "dhf:t:")) != -1)
+  while ((c = getopt(argc, argv, "dhf:i:")) != -1)
+    // printf("%c %s\n", c, optarg);
     switch (c) {
     case 'd':
       debug = true;
@@ -204,16 +218,19 @@ int main(int argc, char *argv[]) {
     case 'f':
       routing_table_filename = optarg;
       break;
+    case 'i':
+      initial_datat_filename = optarg;
+      break;
     case 'h':
-      printf("Usage: %s [-d] [-h] [-f FILE] [-t FILE]\n\n"
+      printf("Usage: %s [-d] [-h] [-f FILE] [-i FILE]\n\n"
              "\t-d - show debuging info\n"
              "\t-f FILE - the file with the stored routes (default: '%s')\n"
-             "\t-t FILE - a test file with the stored commands\n"
+             "\t-i FILE - initial data file with the stored commands\n"
              "\t-h - show this help\n",
              argv[0], ROUTING_TABLE_FILENAME);
       return 0;
     case '?':
-      if (optopt == 'f')
+      if (optopt == 'f' || optopt == 'i')
         fprintf(stderr, "Option -%c requires an argument.\n", optopt);
       else if (isprint(optopt))
         fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -223,7 +240,9 @@ int main(int argc, char *argv[]) {
     }
 
   routing_table_init();
-  routing_table_load();
+  if (initial_datat_filename != NULL)
+    routing_table_load(initial_datat_filename);
+  routing_table_load(NULL);
 
   intitiaze_monitor_fd_set();
   add_to_monitored_fd_set(0);

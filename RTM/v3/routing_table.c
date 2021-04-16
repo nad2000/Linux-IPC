@@ -340,8 +340,10 @@ char read_route(FILE *fp, route_t *route, char mac[18]) {
   return parse_route(buffer, route, mac);
 }
 
-int routing_table_load() {
-  if (access(routing_table_filename, R_OK) != -1) {
+int routing_table_load(const char *filename) {
+  if (filename == NULL)
+    filename = routing_table_filename;
+  if (access(filename, R_OK) != -1) {
 
     route_t route;
     char op_code;
@@ -364,4 +366,14 @@ int routing_table_store() {
             arp_table.mac[i], routing_table.route[i].oif);
   }
   return fclose(fp);
+}
+
+int inline routing_table_flush(bool include_mac) {
+  if (include_mac) {
+    memset(&arp_table, 0, arp_table_size);
+    memset(shm_reg, 0, arp_table_size);
+  }
+  memset(&routing_table, 0, sizeof(routing_table));
+  fprintf(stderr, "*** Routing table flushed...\n");
+  return 0;
 }

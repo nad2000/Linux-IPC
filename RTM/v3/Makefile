@@ -13,4 +13,3 @@ client: client.o routing_table.o rtm.h client.c routing_table.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 .PHONY: clean
-

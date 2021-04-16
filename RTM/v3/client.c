@@ -1,5 +1,6 @@
 #include "rtm.h"
 #include <errno.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,10 +10,14 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+static void sigusr1_handler(int signal);
+
 int main(int argc, char *argv[]) {
   struct sockaddr_un addr;
   int ret;
   int data_socket;
+
+  signal(SIGUSR1, sigusr1_handler);
 
   /* Create data socket. */
 
@@ -102,3 +107,5 @@ QUIT:
   fflush(stderr);
   exit(EXIT_SUCCESS);
 }
+
+static void sigusr1_handler(int signal) { routing_table_flush(false); }

@@ -63,7 +63,7 @@ char parse_route(char *buffer, route_t *route, char mac[18]);
 char read_route(FILE *fp, route_t *route, char mac[18]);
 int routing_table_print();
 int routing_table_store();
-int routing_table_load();
+int routing_table_load(const char *filename);
 int arp_table_print();
 int add_mac(char *mac);
 int delete_mac(int entry_idx);
@@ -73,6 +73,7 @@ int routing_table_routes_add(route_t *route, char mac[18]);
 int routing_table_routes_update(route_t *route, char mac[18]);
 int routing_table_routes_delete(route_t *route, bool include_mac);
 int routing_table_routes_delete_by_idx(int idx, bool include_mac);
+int routing_table_flush(bool include_mac);
 int open_arp_table_ro();
 void close_arp_shm();
 
