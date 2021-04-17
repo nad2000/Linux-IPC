@@ -13,16 +13,13 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+static void sigquit_handler(int signal);
 static char *initial_datat_filename = NULL;
 
 /*An array of File descriptors which the server process
  * is maintaining in order to talk with the connected clients.
  * Master skt FD is also a member of this array*/
 int monitored_fd_set[MAX_CLIENT_SUPPORTED];
-
-/*Each connected client's intermediate result is
- * maintained in this client array.*/
-int client_result[MAX_CLIENT_SUPPORTED] = {0};
 
 pid_t client_pids[MAX_CLIENT_SUPPORTED] = {-1};
 
@@ -192,7 +189,7 @@ int main(int argc, char *argv[]) {
 
   struct sockaddr_un name;
 
-#if 0  
+#if 0
     struct sockaddr_un {
         sa_family_t sun_family;               /* AF_UNIX */
         char        sun_path[108];            /* pathname */
@@ -203,8 +200,6 @@ int main(int argc, char *argv[]) {
   int connection_socket;
   int data_socket;
   // int result;
-  int data;
-  char buffer[BUFFER_SIZE];
   fd_set readfds;
   int comm_socket_fd, i;
   int c;
@@ -305,6 +300,8 @@ int main(int argc, char *argv[]) {
   /*Add master socket to Monitored set of FDs*/
   add_to_monitored_fd_set(connection_socket);
 
+  signal(SIGQUIT, sigquit_handler);
+
   /* This is the main loop for handling connections. */
   /*All Server process usually runs 24 x 7. Good Servers should always up
    * and running and shold never go down. Have you ever seen Facebook Or
@@ -363,50 +360,33 @@ int main(int argc, char *argv[]) {
 
     } else /* Data srrives on some other client FD*/
     {
+      char op_code;
       /*Find the client which has send us the data request*/
-      i = 0, comm_socket_fd = -1;
+      i = 1, comm_socket_fd = -1;
       for (; i < MAX_CLIENT_SUPPORTED; i++) {
-
-        if (FD_ISSET(monitored_fd_set[i], &readfds)) {
+        if (monitored_fd_set[i] > 0 &&
+            FD_ISSET(monitored_fd_set[i], &readfds)) {
           comm_socket_fd = monitored_fd_set[i];
-
-          /*Prepare the buffer to recv the data*/
-          memset(buffer, 0, BUFFER_SIZE);
 
           /* Wait for next data packet. */
           /*Server is blocked here. Waiting for the data to arrive from client
            * 'read' is a blocking system call*/
           if (debug)
             fprintf(stderr, "Waiting for data from the client\n");
-          ret = read(comm_socket_fd, buffer, BUFFER_SIZE);
-
+          ret = read(comm_socket_fd, &op_code, sizeof(op_code));
           if (ret == -1) {
             perror("read");
             exit(EXIT_FAILURE);
           }
 
-          /* Add received summand. */
-          memcpy(&data, buffer, sizeof(int));
-          if (data == 0) {
-            /* Send result. */
-            memset(buffer, 0, BUFFER_SIZE);
-            sprintf(buffer, "Result = %d", client_result[i]);
-
-            if (debug)
-              fprintf(stderr, "sending final result back to client\n");
-            ret = write(comm_socket_fd, buffer, BUFFER_SIZE);
-            if (ret == -1) {
-              perror("write");
-              exit(EXIT_FAILURE);
-            }
-
-            /* Close socket. */
-            close(comm_socket_fd);
-            client_result[i] = 0;
-            remove_from_monitored_fd_set(comm_socket_fd);
-            continue; /*go to select() and block*/
+          switch (op_code) {
+          case 'Q':
+            client_pids[i] = -1;
+            monitored_fd_set[i] = -1;
+            break;
+          default:
+            fprintf(stderr, "Unknown OP code: '%c'\n", op_code);
           }
-          client_result[i] += data;
         }
       }
     }
@@ -423,4 +403,11 @@ int main(int argc, char *argv[]) {
 
   unlink(SOCKET_NAME);
   exit(EXIT_SUCCESS);
+}
+
+static void sigquit_handler(int signal) {
+  quit = true;
+  routing_table_store();
+  close_arp_shm();
+  exit(0);
 }

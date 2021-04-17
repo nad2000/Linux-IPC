@@ -140,8 +140,8 @@ int dump_rounting_table(int fd) {
     }
   }
   memset(&msg, 0, sizeof(sync_msg_t));
-  msg.op_code = 'F';
-  ret = write(fd, &msg, sizeof(sync_msg_t));
+  char op_code = 'F';
+  ret = write(fd, &op_code, sizeof(op_code));
   if (ret == -1) {
     perror("failed to send 'Finish Flushing'");
     exit(EXIT_FAILURE);

@@ -34,8 +34,8 @@ typedef struct _route {
 } route_t;
 
 typedef struct _sync_msg {
-  route_t route;
   char op_code;
+  route_t route;
 } sync_msg_t;
 #pragma pack(0)
 

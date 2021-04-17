@@ -11,11 +11,13 @@
 #include <unistd.h>
 
 static void sigusr1_handler(int signal);
+static void sigquit_handler(int signal);
+static void quit_client();
+static int data_socket;
 
 int main(int argc, char *argv[]) {
   struct sockaddr_un addr;
   int ret;
-  int data_socket;
 
   signal(SIGUSR1, sigusr1_handler);
 
@@ -49,36 +51,45 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
   open_arp_table_ro();
+  signal(SIGQUIT, sigquit_handler);
 
   // Read dumped routeing table
-  sync_msg_t msg;
+  // sync_msg_t msg;
   pid_t pid;
+  char op_code;
+  route_t route;
 
   for (;;) {
-    memset(&msg, 0, sizeof(sync_msg_t));
-    ret = read(data_socket, &msg, sizeof(sync_msg_t));
+    ret = read(data_socket, &op_code, sizeof(op_code));
     if (ret == -1) {
-      perror("read");
+      perror("read op_code");
       break;
     }
-    switch (msg.op_code) {
+    if (op_code != 'Q' && op_code != 'F') {
+      memset(&route, 0, sizeof(route_t));
+      ret = read(data_socket, &route, sizeof(route_t));
+      if (ret == -1) {
+        perror("read op_code");
+        break;
+      }
+    }
+    switch (op_code) {
     case 'A':
       arp_table_print();
       break;
     case 'C':
-      routing_table_routes_add(&msg.route, "");
+      routing_table_routes_add(&route, "");
       break;
     case 'U':
-      routing_table_routes_update(&msg.route, "");
+      routing_table_routes_update(&route, "");
       break;
     case 'D':
       // destination is the index in the table
-      if (is_all_digitsn(msg.route.destination,
-                         sizeof(msg.route.destination))) {
-        int idx = atoi(msg.route.destination);
+      if (is_all_digitsn(route.destination, sizeof(route.destination))) {
+        int idx = atoi(route.destination);
         routing_table_routes_delete_by_idx(idx, false);
       } else
-        routing_table_routes_delete(&msg.route, false);
+        routing_table_routes_delete(&route, false);
       break;
     case 'L':
       routing_table_print();
@@ -100,12 +111,30 @@ int main(int argc, char *argv[]) {
   };
 
 QUIT:
+  quit_client();
+}
 
+static void clean_client_data() {
   close_arp_shm();
   close(data_socket);
   fflush(stdout);
   fflush(stderr);
+}
+
+static void quit_client() {
+  clean_client_data();
   exit(EXIT_SUCCESS);
 }
 
 static void sigusr1_handler(int signal) { routing_table_flush(false); }
+static void sigquit_handler(int signal) {
+
+  const char op_code = 'Q';
+  int ret = write(data_socket, &op_code, sizeof(char));
+  if (ret == -1) {
+    perror("failed to signal server about the exit");
+    clean_client_data();
+    exit(EXIT_FAILURE);
+  }
+  quit_client();
+}
