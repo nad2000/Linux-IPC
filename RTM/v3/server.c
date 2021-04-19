@@ -347,7 +347,7 @@ int main(int argc, char *argv[]) {
         perror("failed to recieve PID");
         exit(EXIT_FAILURE);
       }
-      fprintf(stderr, "Client PID=%d\n", pid);
+      fprintf(stderr, "Client PID=%d connected...\n", pid);
       client_pids[client_index] = pid;
     } else if (FD_ISSET(0, &readfds)) {
 
@@ -381,6 +381,7 @@ int main(int argc, char *argv[]) {
 
           switch (op_code) {
           case 'Q':
+	    fprintf(stderr, "Client PID=%d quit...\n", client_pids[i]);
             client_pids[i] = -1;
             monitored_fd_set[i] = -1;
             break;

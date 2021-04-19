@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 static void sigusr1_handler(int signal);
-static void sigquit_handler(int signal);
+static void sigint_handler(int signal);
 static void quit_client();
 static int data_socket;
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
   open_arp_table_ro();
-  signal(SIGQUIT, sigquit_handler);
+  signal(SIGINT, sigint_handler);
 
   // Read dumped routeing table
   // sync_msg_t msg;
@@ -127,7 +127,7 @@ static void quit_client() {
 }
 
 static void sigusr1_handler(int signal) { routing_table_flush(false); }
-static void sigquit_handler(int signal) {
+static void sigint_handler(int signal) {
 
   const char op_code = 'Q';
   int ret = write(data_socket, &op_code, sizeof(char));
