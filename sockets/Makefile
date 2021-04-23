@@ -1,13 +1,14 @@
 CC=clang
 CFLAGS=-g -Wall
 
-all: client server
+#all: client server
+all: server
 
-server: server.o routing_table.o common.h server.c
+server: server.o common.h server.c
 	$(CC) -lreadline -lrt server.o -o server
 
-client: client.o routing_table.o rtm.h client.c routing_table.c
-	$(CC) -lrt client.o routing_table.o -o client
+client: client.o common.h client.c
+	$(CC) -lrt client.o -o client
 
 %.o: %.c *.h
 	$(CC) -c -o $@ $< $(CFLAGS)
