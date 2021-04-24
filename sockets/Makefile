@@ -1,8 +1,7 @@
 CC=clang
 CFLAGS=-g -Wall
 
-#all: client server
-all: server
+all: client server
 
 server: server.o common.h server.c
 	$(CC) -lreadline -lrt server.o -o server

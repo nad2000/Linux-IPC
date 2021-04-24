@@ -19,11 +19,11 @@
 
 #pragma pack(1)
 typedef struct _request {
-  int a, b;
+  unsigned int a, b;
 } request_t;
 
 typedef struct _result {
-  int c;
+  unsigned int c;
 } result_t;
 #pragma pack(0)
 
